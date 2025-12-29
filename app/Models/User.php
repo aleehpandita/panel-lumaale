@@ -53,4 +53,9 @@ class User extends Authenticatable
         // Permitir solo a tu admin (cámbialo por el email real)
         return $this->email === 'admin@lumaale.com';
     }
+    // Filament v2 (por compatibilidad)
+    public function canAccessFilament(): bool
+    {
+        return $this->email === 'admin@lumaale.com';
+    }
 }
