@@ -10,7 +10,7 @@ use Illuminate\Notifications\Notifiable;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
@@ -54,8 +54,8 @@ class User extends Authenticatable
         return $this->email === 'admin@lumaale.com';
     }
     // Filament v2 (por compatibilidad)
-    public function canAccessFilament(): bool
-    {
-        return $this->email === 'admin@lumaale.com';
-    }
+    // public function canAccessFilament(): bool
+    // {
+    //     return $this->email === 'admin@lumaale.com';
+    // }
 }
