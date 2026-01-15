@@ -10,6 +10,8 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Support\Str;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\TextInput;
 
 class TourResource extends Resource
 {
@@ -56,8 +58,30 @@ class TourResource extends Resource
                         ->preload()
                         ->searchable(),
 
-                    Forms\Components\TagsInput::make('included'),
-                    Forms\Components\TagsInput::make('not_included'),
+                    Repeater::make('included')
+                        ->label('Included')
+                        ->schema([
+                            TextInput::make('item')
+                                ->required()
+                                ->placeholder('Ej: Round-trip transportation'),
+                        ])
+                        ->addActionLabel('Add item')
+                        ->reorderable()
+                        ->defaultItems(0)
+                        ->columnSpanFull(),
+
+                    Repeater::make('not_included')
+                        ->label('Not included')
+                        ->schema([
+                            TextInput::make('item')
+                                ->required()
+                                ->placeholder('Ej: Tips / gratuities'),
+                        ])
+                        ->addActionLabel('Add item')
+                        ->reorderable()
+                        ->defaultItems(0)
+                        ->columnSpanFull(),
+
                 ])
                 ->columns(2),
 
@@ -142,7 +166,16 @@ class TourResource extends Resource
                 Tables\Columns\TextColumn::make('title')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('city')->sortable(),
                 Tables\Columns\TextColumn::make('status')->badge(),
+                Tables\Columns\TextColumn::make('included')
+                    ->label('Included')
+                    ->formatStateUsing(fn ($state) => is_array($state) ? count($state) . ' items' : '0 items'),
+
+                Tables\Columns\TextColumn::make('not_included')
+                    ->label('Not included')
+                    ->formatStateUsing(fn ($state) => is_array($state) ? count($state) . ' items' : '0 items'),
                 Tables\Columns\TextColumn::make('updated_at')->dateTime(),
+                
+
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
