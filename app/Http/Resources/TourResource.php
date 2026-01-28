@@ -37,7 +37,11 @@ class TourResource extends JsonResource
                 'name' => $c->name,
                 'slug' => $c->slug,
             ]),
-
+            'destination' => $this->destination ? [
+                'id' => $this->destination->id,
+                'name' => $this->destination->name,
+                'slug' => $this->destination->slug,
+            ] : null,
             'images' => $this->images->map(fn($img) => [
                 'id' => $img->id,
                 'path' => $img->url,

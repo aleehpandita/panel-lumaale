@@ -10,21 +10,28 @@ use Illuminate\Http\Request;
 
 class TourController extends Controller
 {
-    // GET /api/tours?city=Cancun&category=islas
+    // GET /api/tours?city=Cancun&category=islas&destination=cancun
     public function index(Request $request)
     {
         $q = Tour::query()
             ->where('status', 'published')
-            ->with(['categories']);
+            ->with(['categories','destination']);
 
         if ($request->filled('city')) {
-            $q->where('city', $request->string('city'));
+            $q->where('city', (string) $request->string('city'));
         }
 
         if ($request->filled('category')) {
-            $catSlug = $request->string('category');
+            $catSlug = (string) $request->string('category');
             $q->whereHas('categories', function ($qq) use ($catSlug) {
                 $qq->where('slug', $catSlug);
+            });
+        }
+        if ($request->filled('destination')) {
+            $destSlug = (string) $request->string('destination');
+
+            $q->whereHas('destination', function ($qq) use ($destSlug) {
+                $qq->where('slug', $destSlug);
             });
         }
 
@@ -38,7 +45,7 @@ class TourController extends Controller
     {
         $tour = Tour::where('slug', $slug)
             ->where('status', 'published')
-            ->with(['categories', 'images', 'departures', 'prices'])
+            ->with(['destination','categories', 'images', 'departures', 'prices'])
             ->firstOrFail();
 
         return new TourResource($tour);

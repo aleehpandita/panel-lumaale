@@ -12,6 +12,9 @@ use Filament\Tables\Table;
 use Illuminate\Support\Str;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Select;
+
+
 
 class TourResource extends Resource
 {
@@ -41,7 +44,12 @@ class TourResource extends Resource
                             'inactive' => 'Inactive',
                         ])
                         ->required(),
-
+                    Select::make('destination_id')
+                        ->label('Destino')
+                        ->relationship('destination', 'name')
+                        ->searchable()
+                        ->preload()
+                        ->required(),
                     Forms\Components\TextInput::make('city'),
                     Forms\Components\TextInput::make('duration_hours')->numeric(),
                     Forms\Components\TextInput::make('min_people')->numeric()->default(1),
@@ -133,7 +141,7 @@ class TourResource extends Resource
                         ->columns(2)
                         ->defaultItems(0),
                 ]),
-
+            
             Forms\Components\Section::make('Precios (flexible)')
                 ->schema([
                     Forms\Components\Repeater::make('prices')

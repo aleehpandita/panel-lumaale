@@ -19,6 +19,8 @@ class TourListResource extends JsonResource
             'short_description' => $this->short_description,
             'city' => $this->city,
             'duration_hours' => $this->duration_hours,
+            'destination' => $this->destination?->name,
+            'destination_slug' => $this->destination?->slug,
 
             // path guardado (por si lo ocupas)
             'main_image_path' => $main,
