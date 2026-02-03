@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             TourCategorySeeder::class,
             TourSeeder::class,
+            AdminUserSeeder::class,
             DestinationSeeder::class
         ]);
     }
