@@ -14,82 +14,181 @@ use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
 
-
-
 class TourResource extends Resource
 {
     protected static ?string $model = Tour::class;
     protected static ?string $navigationIcon = 'heroicon-o-map';
+
+    /**
+     * Convierte repeater [{item:"A"},{item:"B"}] -> ["A","B"]
+     */
+    protected static function repeaterToStringArray(?array $state): array
+    {
+        if (!is_array($state)) return [];
+
+        // Si ya viene como ["A","B"], lo dejamos
+        if (isset($state[0]) && is_string($state[0])) {
+            return array_values(array_filter($state));
+        }
+
+        // Si viene como [{item:"A"}...]
+        return array_values(array_filter(array_map(
+            fn ($row) => is_array($row) ? ($row['item'] ?? null) : null,
+            $state
+        )));
+    }
+
+    /**
+     * Convierte ["A","B"] -> [{item:"A"},{item:"B"}] (para que el repeater lo pinte)
+     */
+    protected static function stringArrayToRepeater(?array $state): array
+    {
+        if (!is_array($state)) return [];
+
+        // Si ya es repeater [{item:"A"}], lo dejamos
+        if (isset($state[0]) && is_array($state[0]) && array_key_exists('item', $state[0])) {
+            return $state;
+        }
+
+        return array_map(fn ($v) => ['item' => $v], array_values(array_filter($state)));
+    }
 
     public static function form(Form $form): Form
     {
         return $form->schema([
             Forms\Components\Section::make('Información del tour')
                 ->schema([
-                    Forms\Components\TextInput::make('title')
-                        ->required()
-                        ->live(onBlur: true)
-                        ->afterStateUpdated(function ($state, Forms\Set $set) {
-                            $set('slug', Str::slug($state));
-                        }),
+                    Forms\Components\Tabs::make('Idiomas')
+                        ->columnSpanFull()
+                        ->tabs([
+                            Forms\Components\Tabs\Tab::make('Español')
+                                ->schema([
+                                    TextInput::make('title.es')
+                                        ->label('Título (ES)')
+                                        ->required()
+                                        ->live(onBlur: true)
+                                        ->afterStateUpdated(function ($state, Forms\Set $set) {
+                                            $set('slug', Str::slug((string) $state));
+                                        }),
 
-                    Forms\Components\TextInput::make('slug')
+                                    Forms\Components\Textarea::make('short_description.es')
+                                        ->label('Descripción corta (ES)')
+                                        ->columnSpanFull(),
+
+                                    Forms\Components\RichEditor::make('long_description.es')
+                                        ->label('Descripción larga (ES)')
+                                        ->columnSpanFull(),
+
+                                    TextInput::make('meeting_point.es')
+                                        ->label('Punto de encuentro (ES)')
+                                        ->columnSpanFull(),
+
+                                    Repeater::make('included.es')
+                                        ->label('Incluye (ES)')
+                                        ->schema([
+                                            TextInput::make('item')->required()->placeholder('Ej: Transporte redondo'),
+                                        ])
+                                        ->defaultItems(0)
+                                        ->reorderable()
+                                        ->addActionLabel('Agregar item')
+                                        ->columnSpanFull()
+                                        ->afterStateHydrated(function (Repeater $component, $state) {
+                                            $component->state(self::stringArrayToRepeater($state));
+                                        })
+                                        ->mutateDehydratedStateUsing(fn ($state) => self::repeaterToStringArray($state)),
+
+                                    Repeater::make('not_included.es')
+                                        ->label('No incluye (ES)')
+                                        ->schema([
+                                            TextInput::make('item')->required()->placeholder('Ej: Propinas'),
+                                        ])
+                                        ->defaultItems(0)
+                                        ->reorderable()
+                                        ->addActionLabel('Agregar item')
+                                        ->columnSpanFull()
+                                        ->afterStateHydrated(function (Repeater $component, $state) {
+                                            $component->state(self::stringArrayToRepeater($state));
+                                        })
+                                        ->mutateDehydratedStateUsing(fn ($state) => self::repeaterToStringArray($state)),
+                                ]),
+
+                            Forms\Components\Tabs\Tab::make('English')
+                                ->schema([
+                                    TextInput::make('title.en')
+                                        ->label('Title (EN)')
+                                        ->required(),
+
+                                    Forms\Components\Textarea::make('short_description.en')
+                                        ->label('Short description (EN)')
+                                        ->columnSpanFull(),
+
+                                    Forms\Components\RichEditor::make('long_description.en')
+                                        ->label('Long description (EN)')
+                                        ->columnSpanFull(),
+
+                                    TextInput::make('meeting_point.en')
+                                        ->label('Meeting point (EN)')
+                                        ->columnSpanFull(),
+
+                                    Repeater::make('included.en')
+                                        ->label('Included (EN)')
+                                        ->schema([
+                                            TextInput::make('item')->required()->placeholder('e.g. Round-trip transportation'),
+                                        ])
+                                        ->defaultItems(0)
+                                        ->reorderable()
+                                        ->addActionLabel('Add item')
+                                        ->columnSpanFull()
+                                        ->afterStateHydrated(function (Repeater $component, $state) {
+                                            $component->state(self::stringArrayToRepeater($state));
+                                        })
+                                        ->mutateDehydratedStateUsing(fn ($state) => self::repeaterToStringArray($state)),
+
+                                    Repeater::make('not_included.en')
+                                        ->label('Not included (EN)')
+                                        ->schema([
+                                            TextInput::make('item')->required()->placeholder('e.g. Tips / gratuities'),
+                                        ])
+                                        ->defaultItems(0)
+                                        ->reorderable()
+                                        ->addActionLabel('Add item')
+                                        ->columnSpanFull()
+                                        ->afterStateHydrated(function (Repeater $component, $state) {
+                                            $component->state(self::stringArrayToRepeater($state));
+                                        })
+                                        ->mutateDehydratedStateUsing(fn ($state) => self::repeaterToStringArray($state)),
+                                ]),
+                        ]),
+
+                    TextInput::make('slug')
                         ->required()
                         ->unique(ignoreRecord: true),
 
-                    Forms\Components\Select::make('status')
+                    Select::make('status')
                         ->options([
                             'draft' => 'Draft',
                             'published' => 'Published',
                             'inactive' => 'Inactive',
                         ])
                         ->required(),
+
                     Select::make('destination_id')
                         ->label('Destino')
                         ->relationship('destination', 'name')
                         ->searchable()
                         ->preload()
                         ->required(),
-                    Forms\Components\TextInput::make('city'),
-                    Forms\Components\TextInput::make('duration_hours')->numeric(),
-                    Forms\Components\TextInput::make('min_people')->numeric()->default(1),
-                    Forms\Components\TextInput::make('max_people')->numeric(),
 
-                    Forms\Components\Textarea::make('short_description')->columnSpanFull(),
-                    Forms\Components\RichEditor::make('long_description')->columnSpanFull(),
-
-                    Forms\Components\TextInput::make('meeting_point')->columnSpanFull(),
-
-                    Forms\Components\Select::make('categories')
+                    TextInput::make('city'),
+                    TextInput::make('duration_hours')->numeric(),
+                    TextInput::make('min_people')->numeric()->default(1),
+                    TextInput::make('max_people')->numeric(),
+                    
+                    Select::make('categories')
                         ->relationship('categories', 'name')
                         ->multiple()
                         ->preload()
                         ->searchable(),
-
-                    Repeater::make('included')
-                        ->label('Included')
-                        ->schema([
-                            TextInput::make('item')
-                                ->required()
-                                ->placeholder('Ej: Round-trip transportation'),
-                        ])
-                        ->addActionLabel('Add item')
-                        ->reorderable()
-                        ->defaultItems(0)
-                        ->columnSpanFull(),
-
-                    Repeater::make('not_included')
-                        ->label('Not included')
-                        ->schema([
-                            TextInput::make('item')
-                                ->required()
-                                ->placeholder('Ej: Tips / gratuities'),
-                        ])
-                        ->addActionLabel('Add item')
-                        ->reorderable()
-                        ->defaultItems(0)
-                        ->columnSpanFull(),
-
                 ])
                 ->columns(2),
 
@@ -141,7 +240,7 @@ class TourResource extends Resource
                         ->columns(2)
                         ->defaultItems(0),
                 ]),
-            
+
             Forms\Components\Section::make('Precios (flexible)')
                 ->schema([
                     Forms\Components\Repeater::make('prices')
@@ -171,19 +270,37 @@ class TourResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('title')->searchable()->sortable(),
+                // Mostramos el título ES como default en el admin
+                Tables\Columns\TextColumn::make('title')
+                    ->label('Title (ES)')
+                    ->formatStateUsing(fn ($state) => is_array($state) ? ($state['es'] ?? $state['en'] ?? '') : (string) $state)
+                    ->searchable()
+                    ->sortable(),
+
                 Tables\Columns\TextColumn::make('city')->sortable(),
                 Tables\Columns\TextColumn::make('status')->badge(),
+
                 Tables\Columns\TextColumn::make('included')
-                    ->label('Included')
-                    ->formatStateUsing(fn ($state) => is_array($state) ? count($state) . ' items' : '0 items'),
+                    ->label('Included (ES)')
+                    ->formatStateUsing(function ($state) {
+                        if (is_array($state) && (isset($state['es']) || isset($state['en']))) {
+                            $list = $state['es'] ?? $state['en'] ?? [];
+                            return is_array($list) ? count($list) . ' items' : '0 items';
+                        }
+                        return is_array($state) ? count($state) . ' items' : '0 items';
+                    }),
 
                 Tables\Columns\TextColumn::make('not_included')
-                    ->label('Not included')
-                    ->formatStateUsing(fn ($state) => is_array($state) ? count($state) . ' items' : '0 items'),
-                Tables\Columns\TextColumn::make('updated_at')->dateTime(),
-                
+                    ->label('Not included (ES)')
+                    ->formatStateUsing(function ($state) {
+                        if (is_array($state) && (isset($state['es']) || isset($state['en']))) {
+                            $list = $state['es'] ?? $state['en'] ?? [];
+                            return is_array($list) ? count($list) . ' items' : '0 items';
+                        }
+                        return is_array($state) ? count($state) . ' items' : '0 items';
+                    }),
 
+                Tables\Columns\TextColumn::make('updated_at')->dateTime(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),

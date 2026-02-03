@@ -23,10 +23,23 @@ class Tour extends Model
     ];
 
     protected $casts = [
-        'included'     => 'array',
+        'title' => 'array',
+        'short_description' => 'array',
+        'long_description' => 'array',
+        'meeting_point' => 'array',
+        'included' => 'array',
         'not_included' => 'array',
     ];
+    public function i18n(string $field, string $lang = 'es', $fallback = 'es')
+    {
+        $value = $this->{$field};
 
+        if (!is_array($value)) return $value;
+
+        return $value[$lang]
+            ?? $value[$fallback]
+            ?? null;
+    }
     public function categories()
     {
         // Pivot: tour_tour_category (tour_id, tour_category_id)
