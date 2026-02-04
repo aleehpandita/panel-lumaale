@@ -43,10 +43,10 @@ class DestinationResource extends Resource
 
             FileUpload::make('main_image_path')
                 ->label('Imagen principal')
-                ->image()
-                ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
                 ->disk('s3')
                 ->directory('destinations')
+                ->image()
+                ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
                 ->maxSize(4096)
                 ->columnSpanFull()
                 ->dehydrated(true),
