@@ -14,7 +14,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Filament\Forms\Components\FileUpload;
 use Filament\Tables\Columns\ImageColumn;
-
+use Filament\Forms\Components\TextInput;
+use Illuminate\Support\Str;
+ 
 
 class DestinationResource extends Resource
 {
@@ -23,22 +25,33 @@ class DestinationResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
     public static function form(Form $form): Form
-    {
-        return $form
-            ->schema([
-                
+{
+    return $form
+        ->schema([
+            TextInput::make('name')
+                ->label('Nombre')
+                ->required()
+                ->live(onBlur: true)
+                ->afterStateUpdated(function ($state, callable $set) {
+                    $set('slug', Str::slug((string) $state));
+                }),
 
-                FileUpload::make('main_image_path')
-                    ->label('Imagen principal')
-                    ->image()
-                    ->disk('s3')
-                    ->directory('destinations')
-                    ->visibility('public')
-                    ->maxSize(4096)
-                    ->columnSpanFull(),
+            TextInput::make('slug')
+                ->label('Slug')
+                ->required()
+                ->unique(ignoreRecord: true),
 
-            ]);
-    }
+            FileUpload::make('main_image_path')
+                ->label('Imagen principal')
+                ->image()
+                ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                ->disk('s3')
+                ->directory('destinations')
+                ->maxSize(4096)
+                ->columnSpanFull(),
+        ]);
+}
+
 
     public static function table(Table $table): Table
     {
@@ -48,6 +61,16 @@ class DestinationResource extends Resource
                     ->label('Imagen')
                     ->disk('s3')
                     ->height(50),
+
+                Tables\Columns\TextColumn::make('name')
+                    ->label('Nombre')
+                    ->searchable()
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('slug')
+                    ->label('Slug')
+                    ->searchable()
+                    ->sortable(),
             ])
             ->filters([
                 //
