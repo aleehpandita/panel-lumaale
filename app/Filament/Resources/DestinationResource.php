@@ -50,6 +50,8 @@ class DestinationResource extends Resource
                 ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
                 ->maxSize(4096)
                 ->columnSpanFull()
+                ->reactive()
+                >required()
                 ->dehydrated(true)
                 ->saveUploadedFileUsing(function (UploadedFile $file): string {
                     // Guarda DIRECTO en S3 en /destinations y devuelve el path
