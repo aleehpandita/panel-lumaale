@@ -48,7 +48,8 @@ class DestinationResource extends Resource
                 ->disk('s3')
                 ->directory('destinations')
                 ->maxSize(4096)
-                ->columnSpanFull(),
+                ->columnSpanFull()
+                ->dehydrated(true),
         ]);
 }
 
