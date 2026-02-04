@@ -16,7 +16,8 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Forms\Components\TextInput;
 use Illuminate\Support\Str;
- 
+use Illuminate\Http\UploadedFile;
+
 
 class DestinationResource extends Resource
 {
@@ -49,7 +50,11 @@ class DestinationResource extends Resource
                 ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
                 ->maxSize(4096)
                 ->columnSpanFull()
-                ->dehydrated(true),
+                ->dehydrated(true)
+                ->saveUploadedFileUsing(function (UploadedFile $file): string {
+                    // Guarda DIRECTO en S3 en /destinations y devuelve el path
+                    return $file->storePublicly('destinations', 's3');
+                }),
         ]);
 }
 
