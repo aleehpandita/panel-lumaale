@@ -51,7 +51,7 @@ class DestinationResource extends Resource
                 ->maxSize(4096)
                 ->columnSpanFull()
                 ->reactive()
-                >required()
+                ->required()
                 ->dehydrated(true)
                 ->saveUploadedFileUsing(function (UploadedFile $file): string {
                     // Guarda DIRECTO en S3 en /destinations y devuelve el path
