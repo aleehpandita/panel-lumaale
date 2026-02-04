@@ -62,19 +62,10 @@ return [
     | a global endpoint for temporary storage. You may configure this below:
     |
     */
-
-   'temporary_file_upload' => [
-    'disk' => 'local',
-    'directory' => 'livewire-tmp',
-    'rules' => null,
-    'middleware' => null,
-    'preview_mimes' => [
-        'png', 'gif', 'bmp', 'svg',
-        'jpg', 'jpeg', 'webp',
+    'temporary_file_upload' => [
+        'disk' => 's3',
+        'directory' => 'livewire-tmp',
     ],
-    'max_upload_time' => 5,
-],
-
     /*
     |---------------------------------------------------------------------------
     | Render On Redirect
