@@ -17,6 +17,7 @@ use Filament\Tables\Columns\ImageColumn;
 use Filament\Forms\Components\TextInput;
 use Illuminate\Support\Str;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 
 class DestinationResource extends Resource
@@ -42,20 +43,42 @@ class DestinationResource extends Resource
                 ->required()
                 ->unique(ignoreRecord: true),
 
+            // FileUpload::make('main_image_path')
+            //     ->label('Imagen principal')
+            //     ->disk('s3')
+            //     ->directory('destinations')
+            //     ->image()
+            //     ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+            //     ->maxSize(4096)
+            //     ->columnSpanFull()
+            //     ->reactive()
+            //     ->required()
+            //     ->dehydrated(true)
+            //     ->saveUploadedFileUsing(function (UploadedFile $file): string {
+            //         // Guarda DIRECTO en S3 en /destinations y devuelve el path
+            //         return $file->storePublicly('destinations', 's3');
+            //     }),
             FileUpload::make('main_image_path')
                 ->label('Imagen principal')
-                ->disk('s3')
-                ->directory('destinations')
                 ->image()
                 ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
                 ->maxSize(4096)
                 ->columnSpanFull()
-                ->reactive()
-                ->required()
                 ->dehydrated(true)
                 ->saveUploadedFileUsing(function (UploadedFile $file): string {
-                    // Guarda DIRECTO en S3 en /destinations y devuelve el path
-                    return $file->storePublicly('destinations', 's3');
+                    \Log::info('DESTINATION UPLOAD CALLED', [
+                        'original' => $file->getClientOriginalName(),
+                        'mime' => $file->getClientMimeType(),
+                        'size' => $file->getSize(),
+                    ]);
+
+                    // Fuerza un upload directo a S3 para confirmar que el servidor sí puede escribir
+                    Storage::disk('s3')->put(
+                        'destinations/__FORCED_TEST.webp',
+                        file_get_contents($file->getRealPath())
+                    );
+
+                    return 'destinations/__FORCED_TEST.webp';
                 }),
         ]);
 }
