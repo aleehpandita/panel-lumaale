@@ -43,21 +43,6 @@ class DestinationResource extends Resource
                 ->required()
                 ->unique(ignoreRecord: true),
 
-            // FileUpload::make('main_image_path')
-            //     ->label('Imagen principal')
-            //     ->disk('s3')
-            //     ->directory('destinations')
-            //     ->image()
-            //     ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-            //     ->maxSize(4096)
-            //     ->columnSpanFull()
-            //     ->reactive()
-            //     ->required()
-            //     ->dehydrated(true)
-            //     ->saveUploadedFileUsing(function (UploadedFile $file): string {
-            //         // Guarda DIRECTO en S3 en /destinations y devuelve el path
-            //         return $file->storePublicly('destinations', 's3');
-            //     }),
             FileUpload::make('main_image_path')
                 ->label('Imagen principal')
                 ->image()
@@ -65,21 +50,15 @@ class DestinationResource extends Resource
                 ->maxSize(4096)
                 ->columnSpanFull()
                 ->dehydrated(true)
-                ->saveUploadedFileUsing(function (UploadedFile $file): string {
-                    \Log::info('DESTINATION UPLOAD CALLED', [
-                        'original' => $file->getClientOriginalName(),
-                        'mime' => $file->getClientMimeType(),
-                        'size' => $file->getSize(),
-                    ]);
+                ->saveUploadedFileUsing(function ($file): string {
+                    // $file es TemporaryUploadedFile (Livewire)
+                    $ext = $file->getClientOriginalExtension() ?: 'webp';
+                    $name = Str::ulid() . '.' . $ext;
 
-                    // Fuerza un upload directo a S3 para confirmar que el servidor sí puede escribir
-                    Storage::disk('s3')->put(
-                        'destinations/__FORCED_TEST.webp',
-                        file_get_contents($file->getRealPath())
-                    );
-
-                    return 'destinations/__FORCED_TEST.webp';
+                    // Esto funciona aunque el tmp esté en S3 o local
+                    return $file->storePubliclyAs('destinations', $name, 's3');
                 }),
+            
         ]);
 }
 
