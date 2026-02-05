@@ -18,6 +18,7 @@ use Filament\Forms\Components\TextInput;
 use Illuminate\Support\Str;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 
 class DestinationResource extends Resource
@@ -51,12 +52,19 @@ class DestinationResource extends Resource
                 ->columnSpanFull()
                 ->dehydrated(true)
                 ->saveUploadedFileUsing(function ($file): string {
-                    // $file es TemporaryUploadedFile (Livewire)
-                    $ext = $file->getClientOriginalExtension() ?: 'webp';
+                    Log::info('SAVE UPLOAD USING CALLED', [
+                        'class' => get_class($file),
+                        'name'  => method_exists($file, 'getClientOriginalName') ? $file->getClientOriginalName() : null,
+                    ]);
+
+                    $ext = method_exists($file, 'getClientOriginalExtension') ? ($file->getClientOriginalExtension() ?: 'webp') : 'webp';
                     $name = Str::ulid() . '.' . $ext;
 
-                    // Esto funciona aunque el tmp esté en S3 o local
-                    return $file->storePubliclyAs('destinations', $name, 's3');
+                    $path = $file->storePubliclyAs('destinations', $name, 's3');
+
+                    Log::info('FILE STORED TO S3', ['path' => $path]);
+
+                    return $path;
                 }),
             
         ]);
