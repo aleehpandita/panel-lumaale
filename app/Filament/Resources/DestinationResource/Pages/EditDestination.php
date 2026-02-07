@@ -6,12 +6,64 @@ use App\Filament\Resources\DestinationResource;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 class EditDestination extends EditRecord
 {
     protected static string $resource = DestinationResource::class;
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        $value = $data['main_image_path'] ?? null;
+
+        Log::info('### DEST SAVE ###', ['value' => $value]);
+
+        if (! $value || ! is_string($value)) {
+            return $data;
+        }
+
+        // Si ya es ruta final, no hacemos nada
+        if (str_starts_with($value, 'destinations/')) {
+            return $data;
+        }
+
+        // Si viene como filename (tu caso)
+        if (! str_contains($value, '/')) {
+            $tmp = 'livewire-tmp/' . $value;
+
+            if (Storage::disk('s3')->exists($tmp)) {
+                $ext = pathinfo($tmp, PATHINFO_EXTENSION) ?: 'webp';
+                $final = 'destinations/' . Str::ulid() . '.' . $ext;
+
+                Storage::disk('s3')->copy($tmp, $final);
+                Storage::disk('s3')->delete($tmp);
+
+                Log::info('### MOVED TMP -> DEST ###', ['from' => $tmp, 'to' => $final]);
+
+                $data['main_image_path'] = $final;
+            } else {
+                Log::warning('### TMP NOT FOUND ###', ['tmp' => $tmp]);
+            }
+
+            return $data;
+        }
+
+        // Si viniera como livewire-tmp/..., también lo soportamos
+        if (str_starts_with($value, 'livewire-tmp/')) {
+            $ext = pathinfo($value, PATHINFO_EXTENSION) ?: 'webp';
+            $final = 'destinations/' . Str::ulid() . '.' . $ext;
+
+            Storage::disk('s3')->copy($value, $final);
+            Storage::disk('s3')->delete($value);
+
+            Log::info('### MOVED TMPPATH -> DEST ###', ['from' => $value, 'to' => $final]);
+
+            $data['main_image_path'] = $final;
+        }
+
+        return $data;
+    }
 
     protected function getHeaderActions(): array
     {
@@ -19,22 +71,4 @@ class EditDestination extends EditRecord
             Actions\DeleteAction::make(),
         ];
     }
-    protected function mutateFormDataBeforeSave(array $data): array
-{
-    Log::info('### MUTATE BEFORE SAVE HIT ###');
-
-    if (($data['main_image_path'] ?? null) instanceof TemporaryUploadedFile) {
-        /** @var TemporaryUploadedFile $file */
-        $file = $data['main_image_path'];
-
-        $ext = $file->getClientOriginalExtension() ?: 'webp';
-        $name = Str::ulid() . '.' . $ext;
-
-        $data['main_image_path'] = $file->storePubliclyAs('destinations', $name, 's3');
-
-        Log::info('### MOVED TO DESTINATIONS ###', ['path' => $data['main_image_path']]);
-    }
-
-    return $data;
-}
 }
