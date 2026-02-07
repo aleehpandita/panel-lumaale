@@ -42,7 +42,7 @@ class DestinationResource extends Resource
                 ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
                 ->disk('local') // ✅ local para evitar Livewire tmp en S3
                 ->directory('uploads/destinations') // ✅ se guarda en storage/app/uploads/destinations
-                ->visibility('private')
+                ->visibility('public')  
                 ->preserveFilenames(false)
                 ->dehydrated(true)
                 ->columnSpanFull(),
