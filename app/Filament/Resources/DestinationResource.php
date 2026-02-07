@@ -44,7 +44,7 @@ class DestinationResource extends Resource
                 ->required()
                 ->unique(ignoreRecord: true),
 
-            FileUpload::make('main_image_path')
+           FileUpload::make('main_image_path')
                 ->label('Imagen principal')
                 ->image()
                 ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
