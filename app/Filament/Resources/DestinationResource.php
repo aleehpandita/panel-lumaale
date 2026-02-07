@@ -48,9 +48,11 @@ class DestinationResource extends Resource
                 ->label('Imagen principal')
                 ->image()
                 ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                ->maxSize(4096)
-                ->columnSpanFull()
+                ->disk('s3')
+                ->directory('livewire-tmp')
+                ->visibility('private')
                 ->dehydrated(true)
+                ->columnSpanFull()
             
         ]);
 }
