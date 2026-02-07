@@ -65,6 +65,12 @@ return [
     'temporary_file_upload' => [
         'disk' => 's3',
         'directory' => 'livewire-tmp',
+        'rules' => null,
+        'middleware' => null,
+        'preview_mimes' => [
+            'png', 'gif', 'bmp', 'svg', 'webp', 'jpg', 'jpeg',
+        ],
+        'max_upload_time' => 5,
     ],
     /*
     |---------------------------------------------------------------------------
