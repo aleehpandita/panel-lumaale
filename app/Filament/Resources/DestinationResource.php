@@ -12,7 +12,7 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Tables\Columns\ImageColumn;
 use Illuminate\Support\Str;
-use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 class DestinationResource extends Resource
 {
@@ -40,13 +40,10 @@ class DestinationResource extends Resource
                 ->label('Imagen principal')
                 ->image()
                 ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                ->disk('s3')
-                ->directory('destinations') // ✅ AQUÍ VA
-                ->visibility('public')      // ✅ más fácil para mostrar en tabla
-                ->getUploadedFileNameForStorageUsing(function (TemporaryUploadedFile $file) {
-                    $ext = $file->getClientOriginalExtension() ?: 'webp';
-                    return Str::ulid() . '.' . $ext;
-                })
+                ->disk('local') // ✅ local para evitar Livewire tmp en S3
+                ->directory('uploads/destinations') // ✅ se guarda en storage/app/uploads/destinations
+                ->visibility('private')
+                ->preserveFilenames(false)
                 ->dehydrated(true)
                 ->columnSpanFull(),
         ]);
@@ -54,39 +51,54 @@ class DestinationResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table
-            ->columns([
-                ImageColumn::make('main_image_path')
-                    ->label('Imagen')
-                    ->disk('s3')
-                    ->height(50),
+        return $table->columns([
+            // Como el archivo final queda en S3, generamos URL temporal para verla aunque sea private
+            ImageColumn::make('main_image_path')
+                ->label('Imagen')
+                ->getStateUsing(function ($record) {
+                    if (! $record->main_image_path) {
+                        return null;
+                    }
 
-                Tables\Columns\TextColumn::make('name')
-                    ->label('Nombre')
-                    ->searchable()
-                    ->sortable(),
+                    // Si por alguna razón quedó un path local viejo, no intentamos S3
+                    if (str_starts_with($record->main_image_path, 'uploads/')) {
+                        return null;
+                    }
 
-                Tables\Columns\TextColumn::make('slug')
-                    ->label('Slug')
-                    ->searchable()
-                    ->sortable(),
-            ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
-            ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
-            ]);
+                    // Genera URL temporal (10 min) desde S3
+                    return Storage::disk('s3')->temporaryUrl(
+                        $record->main_image_path,
+                        now()->addMinutes(10)
+                    );
+                })
+                ->height(50),
+
+            Tables\Columns\TextColumn::make('name')
+                ->label('Nombre')
+                ->searchable()
+                ->sortable(),
+
+            Tables\Columns\TextColumn::make('slug')
+                ->label('Slug')
+                ->searchable()
+                ->sortable(),
+        ])
+        ->actions([
+            Tables\Actions\EditAction::make(),
+        ])
+        ->bulkActions([
+            Tables\Actions\BulkActionGroup::make([
+                Tables\Actions\DeleteBulkAction::make(),
+            ]),
+        ]);
     }
 
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListDestinations::route('/'),
+            'index'  => Pages\ListDestinations::route('/'),
             'create' => Pages\CreateDestination::route('/create'),
-            'edit' => Pages\EditDestination::route('/{record}/edit'),
+            'edit'   => Pages\EditDestination::route('/{record}/edit'),
         ];
     }
 }
