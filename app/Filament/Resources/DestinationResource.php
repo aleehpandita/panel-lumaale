@@ -51,18 +51,6 @@ class DestinationResource extends Resource
                 ->maxSize(4096)
                 ->columnSpanFull()
                 ->dehydrated(true)
-               ->saveUploadedFileUsing(function ($file): string {
-                    Log::info('### LUMAALE DEST UPLOAD NEW CODE ### ' . now()->toDateTimeString());
-
-                    $ext = method_exists($file, 'getClientOriginalExtension') ? ($file->getClientOriginalExtension() ?: 'webp') : 'webp';
-                    $name = Str::ulid() . '.' . $ext;
-
-                    $path = $file->storePubliclyAs('destinations', $name, 's3');
-
-                    Log::info('FILE STORED TO S3', ['path' => $path]);
-
-                    return $path;
-                })
             
         ]);
 }
