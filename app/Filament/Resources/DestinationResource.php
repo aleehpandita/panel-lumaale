@@ -46,14 +46,6 @@ class DestinationResource extends Resource
                 ->preserveFilenames(false)
                 ->dehydrated(true)
                 ->columnSpanFull()
-                ->getUploadedFileUrlUsing(function (?string $file): ?string {
-                    if (! $file) {
-                        return null;
-                    }
-
-                    return Storage::disk('s3')
-                        ->temporaryUrl($file, now()->addMinutes(10));
-                })
         ]);
     }
 
