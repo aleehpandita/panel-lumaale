@@ -38,19 +38,26 @@ class DestinationResource extends Resource
                 ->required()
                 ->unique(ignoreRecord: true),
 
+            // ✅ Preview de la imagen ya guardada (S3)
             Placeholder::make('current_image')
-                ->label('Imagen actual')
-                ->content(function (?Destination $record) {
-                    if (! $record?->main_image_path) {
-                        return '-';
-                    }
+            ->label('Imagen actual')
+            ->content(function (?Destination $record) {
+                if (! $record?->main_image_path) {
+                    return new HtmlString('<span style="opacity:.6">Sin imagen</span>');
+                }
 
-                    $url = Storage::disk('s3')->url($record->main_image_path);
+                // Si tu bucket/objetos son públicos:
+                $url = Storage::disk('s3')->url($record->main_image_path);
 
-                    return new HtmlString('<img src="'.$url.'" style="max-height:140px;border-radius:10px;" />');
-                })
-                ->columnSpanFull(),
-                
+                // Si son privados, dime y te paso la versión con URL firmada sin usar temporaryUrl()
+                // (con AWS SDK presigned request).
+
+                return new HtmlString(
+                    '<img src="' . e($url) . '" style="max-height:140px;border-radius:10px;display:block" />'
+                );
+            })
+            ->columnSpanFull(),
+
             FileUpload::make('main_image_path')
                 ->label('Imagen principal')
                 ->image()
@@ -61,6 +68,13 @@ class DestinationResource extends Resource
                 ->preserveFilenames(false)
                 ->dehydrated(true)
                 ->columnSpanFull()
+                 ->afterStateHydrated(function (FileUpload $component, $state) {
+                // ✅ CLAVE: si el estado actual viene de S3 (destinations/...)
+                // vaciamos el FileUpload para que no intente buscarlo en local
+                if (is_string($state) && str_starts_with($state, 'destinations/')) {
+                    $component->state(null);
+                }
+            }),
         ]);
     }
 
