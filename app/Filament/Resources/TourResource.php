@@ -13,6 +13,11 @@ use Illuminate\Support\Str;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Get;
+use Filament\Forms\Components\Placeholder;
+use Illuminate\Support\HtmlString;
+use Illuminate\Support\Facades\Storage;
+
 
 class TourResource extends Resource
 {
@@ -194,39 +199,84 @@ class TourResource extends Resource
 
             Forms\Components\Section::make('Imagen principal')
                 ->schema([
-                    Forms\Components\FileUpload::make('main_image_url')
-                        ->disk('s3')
-                        ->visibility('public')
-                        ->directory('tours/main')
-                        ->preserveFilenames(false)
-                        ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                        ->image()
-                        ->imageEditor()
-                        ->maxSize(4096),
+                     Placeholder::make('current_main_image')
+                    ->label('Imagen actual')
+                    ->content(function (? \App\Models\Tour $record) {
+                        if (! $record?->main_image_url) {
+                            return '-';
+                        }
+
+                        // Si ya está en S3 como "tours/main/..."
+                        $url = str_starts_with($record->main_image_url, 'tours/')
+                            ? Storage::disk('s3')->url($record->main_image_url)
+                            : (str_starts_with($record->main_image_url, 'http') ? $record->main_image_url : null);
+
+                        if (! $url) return '-';
+
+                        return new HtmlString(
+                            '<img src="'.$url.'" style="max-width:220px; height:auto; border-radius:8px; border:1px solid #e5e7eb;" />'
+                        );
+                    }),
+
+                Forms\Components\FileUpload::make('main_image_url')
+                    ->label('Main image url')
+                    ->disk('local') // ✅ igual que destinations
+                    ->directory('uploads/tours/main') // ✅ se sube local primero
+                    ->visibility('public')
+                    ->preserveFilenames(false)
+                    ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                    ->image()
+                    ->imageEditor()
+                    ->maxSize(4096),
                 ]),
 
             Forms\Components\Section::make('Galería')
                 ->schema([
-                    Forms\Components\Repeater::make('images')
-                        ->relationship()
-                        ->schema([
-                            Forms\Components\FileUpload::make('url')
-                                ->disk('s3')
-                                ->visibility('public')
-                                ->directory('tours/gallery')
-                                ->preserveFilenames(false)
-                                ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                                ->image()
-                                ->imageEditor()
-                                ->maxSize(4096)
-                                ->required(),
+                     Forms\Components\Repeater::make('images')
+                    ->relationship()
+                    ->schema([
+                        Placeholder::make('current_gallery_image')
+                            ->label('Imagen actual')
+                            ->content(function (Get $get) {
+                                $state = $get('url');
+                                if (! $state) return '-';
 
-                            Forms\Components\TextInput::make('sort_order')
-                                ->numeric()
-                                ->default(0),
-                        ])
-                        ->columns(2)
-                        ->defaultItems(0),
+                                // Ya en S3
+                                if (str_starts_with($state, 'tours/')) {
+                                    $url = Storage::disk('s3')->url($state);
+                                    return new HtmlString(
+                                        '<img src="'.$url.'" style="max-width:160px; height:auto; border-radius:8px; border:1px solid #e5e7eb;" />'
+                                    );
+                                }
+
+                                // Si por algo te guardaron una url absoluta
+                                if (str_starts_with($state, 'http')) {
+                                    return new HtmlString(
+                                        '<img src="'.$state.'" style="max-width:160px; height:auto; border-radius:8px; border:1px solid #e5e7eb;" />'
+                                    );
+                                }
+
+                                return '-';
+                            }),
+
+                        Forms\Components\FileUpload::make('url')
+                            ->label('Imagen')
+                            ->disk('local') // ✅ igual que destinations
+                            ->directory('uploads/tours/gallery')
+                            ->visibility('public')
+                            ->preserveFilenames(false)
+                            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                            ->image()
+                            ->imageEditor()
+                            ->maxSize(4096)
+                            ->required(),
+
+                        Forms\Components\TextInput::make('sort_order')
+                            ->numeric()
+                            ->default(0),
+                    ])
+                    ->columns(2)
+                    ->defaultItems(0),
                 ]),
 
             Forms\Components\Section::make('Horarios (si aplica)')
