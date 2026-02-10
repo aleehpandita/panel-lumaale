@@ -12,6 +12,8 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Tables\Columns\ImageColumn;
 use Illuminate\Support\Str;
+use Filament\Forms\Components\Placeholder;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Storage;
 
 class DestinationResource extends Resource
@@ -36,6 +38,19 @@ class DestinationResource extends Resource
                 ->required()
                 ->unique(ignoreRecord: true),
 
+            Placeholder::make('current_image')
+                ->label('Imagen actual')
+                ->content(function (?Destination $record) {
+                    if (! $record?->main_image_path) {
+                        return '-';
+                    }
+
+                    $url = Storage::disk('s3')->url($record->main_image_path);
+
+                    return new HtmlString('<img src="'.$url.'" style="max-height:140px;border-radius:10px;" />');
+                })
+                ->columnSpanFull(),
+                
             FileUpload::make('main_image_path')
                 ->label('Imagen principal')
                 ->image()
