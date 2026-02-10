@@ -67,14 +67,7 @@ class DestinationResource extends Resource
                 ->visibility('public')  
                 ->preserveFilenames(false)
                 ->dehydrated(true)
-                ->columnSpanFull()
-                 ->afterStateHydrated(function (FileUpload $component, $state) {
-                // ✅ CLAVE: si el estado actual viene de S3 (destinations/...)
-                // vaciamos el FileUpload para que no intente buscarlo en local
-                if (is_string($state) && str_starts_with($state, 'destinations/')) {
-                    $component->state(null);
-                }
-            }),
+                ->columnSpanFull(),
         ]);
     }
 
