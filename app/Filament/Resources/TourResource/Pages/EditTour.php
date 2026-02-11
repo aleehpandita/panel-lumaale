@@ -5,7 +5,7 @@ namespace App\Filament\Resources\TourResource\Pages;
 use App\Filament\Resources\TourResource;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class EditTour extends EditRecord
 {
@@ -13,41 +13,66 @@ class EditTour extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        // 1) MAIN IMAGE
-        if (!empty($data['main_image_url']) && str_starts_with($data['main_image_url'], 'uploads/')) {
-            $data['main_image_url'] = $this->moveLocalToS3($data['main_image_url'], 'tours/main');
+        $record = $this->getRecord();
+
+        // MAIN IMAGE: si no subiste una nueva, no lo borres ni lo cambies
+        if (empty($data['main_image_url'])) {
+            $data['main_image_url'] = $record->main_image_url;
+        } else {
+            $localPath = $data['main_image_url'];
+
+            // si viene de local, súbelo a S3
+            if (is_string($localPath) && Str::startsWith($localPath, 'uploads/')) {
+                if (Storage::disk('local')->exists($localPath)) {
+                    $ext = pathinfo($localPath, PATHINFO_EXTENSION) ?: 'webp';
+                    $s3Path = 'tours/main/' . Str::uuid() . '.' . $ext;
+
+                    Storage::disk('s3')->put(
+                        $s3Path,
+                        Storage::disk('local')->get($localPath),
+                        ['visibility' => 'public']
+                    );
+
+                    Storage::disk('local')->delete($localPath);
+
+                    // opcional: borrar anterior en S3 si existía
+                    if (!empty($record->main_image_url) && is_string($record->main_image_url)) {
+                        Storage::disk('s3')->delete($record->main_image_url);
+                    }
+
+                    $data['main_image_url'] = $s3Path;
+                }
+            }
         }
 
-        // 2) GALLERY
+        // GALLERY: convertir solo los que vengan de local
         if (!empty($data['images']) && is_array($data['images'])) {
             foreach ($data['images'] as $i => $img) {
-                if (!empty($img['url']) && str_starts_with($img['url'], 'uploads/')) {
-                    $data['images'][$i]['url'] = $this->moveLocalToS3($img['url'], 'tours/gallery');
+                if (empty($img['url']) || !is_string($img['url'])) {
+                    continue;
+                }
+
+                $localPath = $img['url'];
+
+                if (Str::startsWith($localPath, 'uploads/')) {
+                    if (Storage::disk('local')->exists($localPath)) {
+                        $ext = pathinfo($localPath, PATHINFO_EXTENSION) ?: 'webp';
+                        $s3Path = 'tours/gallery/' . Str::uuid() . '.' . $ext;
+
+                        Storage::disk('s3')->put(
+                            $s3Path,
+                            Storage::disk('local')->get($localPath),
+                            ['visibility' => 'public']
+                        );
+
+                        Storage::disk('local')->delete($localPath);
+
+                        $data['images'][$i]['url'] = $s3Path;
+                    }
                 }
             }
         }
 
         return $data;
-    }
-
-    private function moveLocalToS3(string $localPath, string $s3Dir): string
-    {
-        if (!Storage::disk('local')->exists($localPath)) {
-            Log::warning('Local file not found before S3 move', ['localPath' => $localPath]);
-            return $localPath;
-        }
-
-        $filename = basename($localPath);
-        $s3Path = trim($s3Dir, '/') . '/' . $filename;
-
-        $stream = Storage::disk('local')->readStream($localPath);
-        Storage::disk('s3')->writeStream($s3Path, $stream, ['visibility' => 'public']);
-        if (is_resource($stream)) fclose($stream);
-
-        Storage::disk('local')->delete($localPath);
-
-        Log::info('Moved file local -> s3', ['local' => $localPath, 's3' => $s3Path]);
-
-        return $s3Path;
     }
 }

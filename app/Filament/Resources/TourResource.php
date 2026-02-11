@@ -219,13 +219,14 @@ class TourResource extends Resource
                     }),
 
                 Forms\Components\FileUpload::make('main_image_url')
-                    ->label('Main image url')
+                    ->label('Imagen principal')
                     ->disk('local') // ✅ igual que destinations
                     ->directory('uploads/tours/main') // ✅ se sube local primero
                     ->visibility('public')
                     ->preserveFilenames(false)
                     ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
                     ->image()
+                    ->dehydrated(true)
                     ->imageEditor()
                     ->maxSize(4096),
                 ]),
@@ -261,12 +262,13 @@ class TourResource extends Resource
 
                         Forms\Components\FileUpload::make('url')
                             ->label('Imagen')
-                            ->disk('local') // ✅ igual que destinations
+                            ->image()
+                            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                            ->disk('local')
                             ->directory('uploads/tours/gallery')
                             ->visibility('public')
                             ->preserveFilenames(false)
-                            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                            ->image()
+                            ->dehydrated(true)
                             ->imageEditor()
                             ->maxSize(4096)
                             ->required(),
