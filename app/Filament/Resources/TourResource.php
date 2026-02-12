@@ -223,53 +223,49 @@ class TourResource extends Resource
             ->columnSpanFull(),
     ]),
 
-Forms\Components\Section::make('Galería')
+Forms\Components\Repeater::make('images')
+    ->relationship()
     ->schema([
-        Repeater::make('images')
-            ->relationship()
-            ->schema([
-                Placeholder::make('current_gallery_image')
-                    ->label('Imagen actual')
-                    ->content(function (Get $get) {
-                        $state = $get('url');
-                        if (! $state) return '-';
+        Placeholder::make('current_gallery_image')
+            ->label('Imagen actual')
+            ->content(function (Get $get) {
+                $state = $get('url');
+                if (! $state) return '-';
 
-                        if (str_starts_with($state, 'tours/')) {
-                            $url = Storage::disk('s3')->url($state);
-                            return new HtmlString(
-                                '<img src="'.$url.'" style="max-width:160px; height:auto; border-radius:8px; border:1px solid #e5e7eb;" />'
-                            );
-                        }
+                if (str_starts_with($state, 'tours/')) {
+                    $url = Storage::disk('s3')->url($state);
+                    return new \Illuminate\Support\HtmlString(
+                        '<img src="'.$url.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
+                    );
+                }
 
-                        if (str_starts_with($state, 'http')) {
-                            return new HtmlString(
-                                '<img src="'.$state.'" style="max-width:160px; height:auto; border-radius:8px; border:1px solid #e5e7eb;" />'
-                            );
-                        }
+                if (str_starts_with($state, 'http')) {
+                    return new \Illuminate\Support\HtmlString(
+                        '<img src="'.$state.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
+                    );
+                }
 
-                        return '-';
-                    }),
+                return '-';
+            }),
 
-                FileUpload::make('url')
-                    ->label('Imagen')
-                    ->image()
-                    ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                    ->disk('local')
-                    ->directory('uploads/tours/gallery')
-                    ->visibility('public')
-                    ->preserveFilenames(false)
-                    ->dehydrated(true)
-                    ->imageEditor()
-                    ->maxSize(4096)
-                    ->required(),
+        Forms\Components\FileUpload::make('url')
+            ->label('Imagen')
+            ->image()
+            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+            ->disk('local')
+            ->directory('uploads/tours/gallery')
+            ->visibility('public')
+            ->preserveFilenames(false)
+            ->dehydrated(true)
+            ->maxSize(4096)
+            ->required(),
 
-                TextInput::make('sort_order')
-                    ->numeric()
-                    ->default(0),
-            ])
-            ->columns(2)
-            ->defaultItems(0),
-    ]),
+        Forms\Components\TextInput::make('sort_order')
+            ->numeric()
+            ->default(0),
+    ])
+    ->columns(2)
+    ->defaultItems(0),
 
             Forms\Components\Section::make('Horarios (si aplica)')
                 ->schema([
