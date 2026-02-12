@@ -199,79 +199,60 @@ class TourResource extends Resource
 
             Forms\Components\Section::make('Imagen principal')
                 ->schema([
-                     Placeholder::make('current_main_image')
+                    Placeholder::make('main_image_current')
                     ->label('Imagen actual')
-                    ->content(function (? \App\Models\Tour $record) {
-                        if (! $record?->main_image_url) {
+                    ->content(function (?Tour $record) {
+                        if (! $record || ! $record->main_image_url) {
                             return '-';
                         }
 
-                        // Si ya está en S3 como "tours/main/..."
-                        $url = str_starts_with($record->main_image_url, 'tours/')
-                            ? Storage::disk('s3')->url($record->main_image_url)
-                            : (str_starts_with($record->main_image_url, 'http') ? $record->main_image_url : null);
+                        $url = Storage::disk('s3')->url($record->main_image_url);
 
-                        if (! $url) return '-';
-
-                        return new HtmlString(
-                            '<img src="'.$url.'" style="max-width:220px; height:auto; border-radius:8px; border:1px solid #e5e7eb;" />'
-                        );
+                        return new HtmlString('<img src="'.$url.'" style="height:80px;border-radius:8px" />');
                     }),
 
-                Forms\Components\FileUpload::make('main_image_url')
-                    ->label('Imagen principal')
-                    ->disk('local') // ✅ igual que destinations
-                    ->directory('uploads/tours/main') // ✅ se sube local primero
-                    ->visibility('public')
-                    ->preserveFilenames(false)
-                    ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                    ->image()
-                    ->dehydrated(true)
-                    ->imageEditor()
-                    ->maxSize(4096),
-                ]),
+                    FileUpload::make('main_image_url')
+                        ->label('Imagen principal')
+                        ->image()
+                        ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                        ->disk('local') // 👈 igual que Destinations
+                        ->directory('uploads/tours/main') // 👈 para que dispare tu mutateFormData...
+                        ->visibility('public')
+                        ->preserveFilenames(false)
+                        ->dehydrated(true)
+                        ->columnSpanFull(),
 
             Forms\Components\Section::make('Galería')
                 ->schema([
                      Forms\Components\Repeater::make('images')
                     ->relationship()
                     ->schema([
-                        Placeholder::make('current_gallery_image')
-                            ->label('Imagen actual')
-                            ->content(function (Get $get) {
-                                $state = $get('url');
-                                if (! $state) return '-';
+                        Placeholder::make('gallery_current')
+                            ->label('Galería actual')
+                            ->content(function (?Tour $record) {
+                                if (! $record) return '-';
 
-                                // Ya en S3
-                                if (str_starts_with($state, 'tours/')) {
-                                    $url = Storage::disk('s3')->url($state);
-                                    return new HtmlString(
-                                        '<img src="'.$url.'" style="max-width:160px; height:auto; border-radius:8px; border:1px solid #e5e7eb;" />'
-                                    );
-                                }
+                                $imgs = $record->images()->orderBy('sort_order')->get();
+                                if ($imgs->isEmpty()) return '-';
 
-                                // Si por algo te guardaron una url absoluta
-                                if (str_starts_with($state, 'http')) {
-                                    return new HtmlString(
-                                        '<img src="'.$state.'" style="max-width:160px; height:auto; border-radius:8px; border:1px solid #e5e7eb;" />'
-                                    );
-                                }
+                                $html = $imgs->map(function ($img) {
+                                    $url = Storage::disk('s3')->url($img->url);
+                                    return '<img src="'.$url.'" style="height:60px;width:60px;object-fit:cover;border-radius:8px;margin-right:8px" />';
+                                })->implode('');
 
-                                return '-';
-                            }),
+                                return new HtmlString('<div style="display:flex;gap:8px;flex-wrap:wrap">'.$html.'</div>');
+                            })
+                            ->columnSpanFull(),
 
-                        Forms\Components\FileUpload::make('url')
+                        FileUpload::make('url')
                             ->label('Imagen')
                             ->image()
                             ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                            ->disk('local')
-                            ->directory('uploads/tours/gallery')
+                            ->disk('local') // 👈 clave
+                            ->directory('uploads/tours/gallery') // 👈 clave (para que EditTour/CreateTour lo suban a S3)
                             ->visibility('public')
                             ->preserveFilenames(false)
-                            ->dehydrated(true)
-                            ->imageEditor()
-                            ->maxSize(4096)
-                            ->required(),
+                            ->dehydrated(true),
 
                         Forms\Components\TextInput::make('sort_order')
                             ->numeric()
