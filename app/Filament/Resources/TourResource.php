@@ -17,7 +17,7 @@ use Filament\Forms\Get;
 use Filament\Forms\Components\Placeholder;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Storage;
-
+use Filament\Forms\Components\FileUpload;
 
 class TourResource extends Resource
 {
@@ -198,69 +198,78 @@ class TourResource extends Resource
                 ->columns(2),
 
             Forms\Components\Section::make('Imagen principal')
-                ->schema([
-                    Placeholder::make('main_image_current')
+    ->schema([
+        Placeholder::make('main_image_current')
+            ->label('Imagen actual')
+            ->content(function (?Tour $record) {
+                if (! $record || ! $record->main_image_url) {
+                    return '-';
+                }
+
+                $url = Storage::disk('s3')->url($record->main_image_url);
+
+                return new HtmlString('<img src="'.$url.'" style="height:80px;border-radius:8px" />');
+            }),
+
+        FileUpload::make('main_image_url')
+            ->label('Imagen principal')
+            ->image()
+            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+            ->disk('local')
+            ->directory('uploads/tours/main')
+            ->visibility('public')
+            ->preserveFilenames(false)
+            ->dehydrated(true)
+            ->columnSpanFull(),
+    ]),
+
+Forms\Components\Section::make('Galería')
+    ->schema([
+        Repeater::make('images')
+            ->relationship()
+            ->schema([
+                Placeholder::make('current_gallery_image')
                     ->label('Imagen actual')
-                    ->content(function (?Tour $record) {
-                        if (! $record || ! $record->main_image_url) {
-                            return '-';
+                    ->content(function (Get $get) {
+                        $state = $get('url');
+                        if (! $state) return '-';
+
+                        if (str_starts_with($state, 'tours/')) {
+                            $url = Storage::disk('s3')->url($state);
+                            return new HtmlString(
+                                '<img src="'.$url.'" style="max-width:160px; height:auto; border-radius:8px; border:1px solid #e5e7eb;" />'
+                            );
                         }
 
-                        $url = Storage::disk('s3')->url($record->main_image_url);
+                        if (str_starts_with($state, 'http')) {
+                            return new HtmlString(
+                                '<img src="'.$state.'" style="max-width:160px; height:auto; border-radius:8px; border:1px solid #e5e7eb;" />'
+                            );
+                        }
 
-                        return new HtmlString('<img src="'.$url.'" style="height:80px;border-radius:8px" />');
+                        return '-';
                     }),
 
-                    FileUpload::make('main_image_url')
-                        ->label('Imagen principal')
-                        ->image()
-                        ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                        ->disk('local') // 👈 igual que Destinations
-                        ->directory('uploads/tours/main') // 👈 para que dispare tu mutateFormData...
-                        ->visibility('public')
-                        ->preserveFilenames(false)
-                        ->dehydrated(true)
-                        ->columnSpanFull(),
+                FileUpload::make('url')
+                    ->label('Imagen')
+                    ->image()
+                    ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                    ->disk('local')
+                    ->directory('uploads/tours/gallery')
+                    ->visibility('public')
+                    ->preserveFilenames(false)
+                    ->dehydrated(true)
+                    ->imageEditor()
+                    ->maxSize(4096)
+                    ->required(),
 
-            Forms\Components\Section::make('Galería')
-                ->schema([
-                     Forms\Components\Repeater::make('images')
-                    ->relationship()
-                    ->schema([
-                        Placeholder::make('gallery_current')
-                            ->label('Galería actual')
-                            ->content(function (?Tour $record) {
-                                if (! $record) return '-';
-
-                                $imgs = $record->images()->orderBy('sort_order')->get();
-                                if ($imgs->isEmpty()) return '-';
-
-                                $html = $imgs->map(function ($img) {
-                                    $url = Storage::disk('s3')->url($img->url);
-                                    return '<img src="'.$url.'" style="height:60px;width:60px;object-fit:cover;border-radius:8px;margin-right:8px" />';
-                                })->implode('');
-
-                                return new HtmlString('<div style="display:flex;gap:8px;flex-wrap:wrap">'.$html.'</div>');
-                            })
-                            ->columnSpanFull(),
-
-                        FileUpload::make('url')
-                            ->label('Imagen')
-                            ->image()
-                            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                            ->disk('local') // 👈 clave
-                            ->directory('uploads/tours/gallery') // 👈 clave (para que EditTour/CreateTour lo suban a S3)
-                            ->visibility('public')
-                            ->preserveFilenames(false)
-                            ->dehydrated(true),
-
-                        Forms\Components\TextInput::make('sort_order')
-                            ->numeric()
-                            ->default(0),
-                    ])
-                    ->columns(2)
-                    ->defaultItems(0),
-                ]),
+                TextInput::make('sort_order')
+                    ->numeric()
+                    ->default(0),
+            ])
+            ->columns(2)
+            ->defaultItems(0),
+    ]),
 
             Forms\Components\Section::make('Horarios (si aplica)')
                 ->schema([
