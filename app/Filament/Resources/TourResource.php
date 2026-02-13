@@ -6,6 +6,7 @@ use App\Filament\Resources\TourResource\Pages;
 use App\Models\Tour;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Forms\Get;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -13,11 +14,9 @@ use Illuminate\Support\Str;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Get;
 use Filament\Forms\Components\Placeholder;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Storage;
-use Filament\Forms\Components\FileUpload;
 
 class TourResource extends Resource
 {
@@ -29,14 +28,12 @@ class TourResource extends Resource
      */
     protected static function repeaterToStringArray(?array $state): array
     {
-        if (!is_array($state)) return [];
+        if (! is_array($state)) return [];
 
-        // Si ya viene como ["A","B"], lo dejamos
         if (isset($state[0]) && is_string($state[0])) {
             return array_values(array_filter($state));
         }
 
-        // Si viene como [{item:"A"}...]
         return array_values(array_filter(array_map(
             fn ($row) => is_array($row) ? ($row['item'] ?? null) : null,
             $state
@@ -44,13 +41,12 @@ class TourResource extends Resource
     }
 
     /**
-     * Convierte ["A","B"] -> [{item:"A"},{item:"B"}] (para que el repeater lo pinte)
+     * Convierte ["A","B"] -> [{item:"A"},{item:"B"}]
      */
     protected static function stringArrayToRepeater(?array $state): array
     {
-        if (!is_array($state)) return [];
+        if (! is_array($state)) return [];
 
-        // Si ya es repeater [{item:"A"}], lo dejamos
         if (isset($state[0]) && is_array($state[0]) && array_key_exists('item', $state[0])) {
             return $state;
         }
@@ -188,7 +184,7 @@ class TourResource extends Resource
                     TextInput::make('duration_hours')->numeric(),
                     TextInput::make('min_people')->numeric()->default(1),
                     TextInput::make('max_people')->numeric(),
-                    
+
                     Select::make('categories')
                         ->relationship('categories', 'name')
                         ->multiple()
@@ -198,78 +194,86 @@ class TourResource extends Resource
                 ->columns(2),
 
             Forms\Components\Section::make('Imagen principal')
-    ->schema([
-        Placeholder::make('main_image_current')
-            ->label('Imagen actual')
-            ->content(function (?Tour $record) {
-                if (! $record || ! $record->main_image_url) {
-                    return '-';
-                }
+                ->schema([
+                    Placeholder::make('main_image_current')
+                        ->label('Imagen actual')
+                        ->content(function (?Tour $record) {
+                            if (! $record || ! $record->main_image_url) {
+                                return '-';
+                            }
 
-                $url = Storage::disk('s3')->url($record->main_image_url);
+                            // Si ya está en S3 (tours/...)
+                            if (str_starts_with($record->main_image_url, 'tours/')) {
+                                $url = Storage::disk('s3')->url($record->main_image_url);
+                                return new HtmlString('<img src="'.$url.'" style="height:80px;border-radius:8px" />');
+                            }
 
-                return new HtmlString('<img src="'.$url.'" style="height:80px;border-radius:8px" />');
-            }),
+                            return '-';
+                        }),
 
-        FileUpload::make('main_image_url')
-            ->label('Imagen principal')
-            ->image()
-            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-            ->disk('local')
-            ->directory('uploads/tours/main')
-            ->visibility('public')
-            ->preserveFilenames(false)
-            ->dehydrated(true)
-            ->columnSpanFull(),
-    ]),
+                    Forms\Components\FileUpload::make('main_image_url')
+                        ->label('Imagen principal')
+                        ->image()
+                        ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                        ->disk('local')
+                        ->directory('uploads/tours/main')
+                        ->visibility('public')
+                        ->preserveFilenames(false)
+                        ->dehydrated(true)
+                        ->columnSpanFull(),
+                ]),
 
-Forms\Components\Repeater::make('images')
-    ->relationship()
-    ->schema([
-        Placeholder::make('current_gallery_image')
-            ->label('Imagen actual')
-            ->content(function (Get $get) {
-                $state = $get('url');
-                if (! $state) return '-';
+            Forms\Components\Section::make('Galería')
+                ->schema([
+                    Repeater::make('images')
+                        ->relationship() // usa relación "images" del modelo Tour
+                        ->schema([
+                            Placeholder::make('current_gallery_image')
+                                ->label('Imagen actual')
+                                ->content(function (Get $get) {
+                                    $state = $get('url');
+                                    if (! $state) return '-';
 
-                if (str_starts_with($state, 'tours/')) {
-                    $url = Storage::disk('s3')->url($state);
-                    return new \Illuminate\Support\HtmlString(
-                        '<img src="'.$url.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
-                    );
-                }
+                                    if (is_string($state) && str_starts_with($state, 'tours/')) {
+                                        $url = Storage::disk('s3')->url($state);
+                                        return new HtmlString(
+                                            '<img src="'.$url.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
+                                        );
+                                    }
 
-                if (str_starts_with($state, 'http')) {
-                    return new \Illuminate\Support\HtmlString(
-                        '<img src="'.$state.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
-                    );
-                }
+                                    // si quedó una url absoluta por alguna razón
+                                    if (is_string($state) && str_starts_with($state, 'http')) {
+                                        return new HtmlString(
+                                            '<img src="'.$state.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
+                                        );
+                                    }
 
-                return '-';
-            }),
+                                    return '-';
+                                }),
 
-        Forms\Components\FileUpload::make('url')
-            ->label('Imagen')
-            ->image()
-            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-            ->disk('local')
-            ->directory('uploads/tours/gallery')
-            ->visibility('public')
-            ->preserveFilenames(false)
-            ->dehydrated(true)
-            ->maxSize(4096)
-            ->required(),
+                            Forms\Components\FileUpload::make('url')
+                                ->label('Imagen')
+                                ->image()
+                                ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                                ->disk('local')
+                                ->directory('uploads/tours/gallery')
+                                ->visibility('public')
+                                ->preserveFilenames(false)
+                                ->dehydrated(true)
+                                ->maxSize(4096)
+                                ->required(),
 
-        Forms\Components\TextInput::make('sort_order')
-            ->numeric()
-            ->default(0),
-    ])
-    ->columns(2)
-    ->defaultItems(0),
+                            TextInput::make('sort_order')
+                                ->numeric()
+                                ->default(0),
+                        ])
+                        ->columns(2)
+                        ->defaultItems(0),
+                ]),
 
             Forms\Components\Section::make('Horarios (si aplica)')
                 ->schema([
-                    Forms\Components\Repeater::make('departures')
+                    Repeater::make('departures')
                         ->relationship()
                         ->schema([
                             Forms\Components\TimePicker::make('departure_time')->required(),
@@ -281,22 +285,22 @@ Forms\Components\Repeater::make('images')
 
             Forms\Components\Section::make('Precios (flexible)')
                 ->schema([
-                    Forms\Components\Repeater::make('prices')
+                    Repeater::make('prices')
                         ->relationship()
                         ->schema([
-                            Forms\Components\TextInput::make('name')->placeholder('Tarifa base / Temporada alta'),
+                            TextInput::make('name')->placeholder('Tarifa base / Temporada alta'),
                             Forms\Components\DatePicker::make('start_date')->nullable(),
                             Forms\Components\DatePicker::make('end_date')->nullable(),
 
-                            Forms\Components\TextInput::make('price_adult')->numeric()->required(),
+                            TextInput::make('price_adult')->numeric()->required(),
 
-                            Forms\Components\TextInput::make('price_child')->numeric()->nullable()
+                            TextInput::make('price_child')->numeric()->nullable()
                                 ->helperText('NULL = no niños, 0 = gratis, >0 = paga'),
 
-                            Forms\Components\TextInput::make('price_infant')->numeric()->nullable()
+                            TextInput::make('price_infant')->numeric()->nullable()
                                 ->helperText('NULL = no infantes, 0 = gratis, >0 = paga'),
 
-                            Forms\Components\TextInput::make('currency')->default('USD')->maxLength(3),
+                            TextInput::make('currency')->default('USD')->maxLength(3),
                         ])
                         ->columns(3)
                         ->defaultItems(1),
@@ -308,7 +312,11 @@ Forms\Components\Repeater::make('images')
     {
         return $table
             ->columns([
-                // Mostramos el título ES como default en el admin
+                Tables\Columns\ImageColumn::make('main_image_url')
+                    ->label('Imagen')
+                    ->disk('s3')
+                    ->height(50),
+
                 Tables\Columns\TextColumn::make('title')
                     ->label('Title (ES)')
                     ->formatStateUsing(fn ($state) => is_array($state) ? ($state['es'] ?? $state['en'] ?? '') : (string) $state)
@@ -317,26 +325,6 @@ Forms\Components\Repeater::make('images')
 
                 Tables\Columns\TextColumn::make('city')->sortable(),
                 Tables\Columns\TextColumn::make('status')->badge(),
-
-                Tables\Columns\TextColumn::make('included')
-                    ->label('Included (ES)')
-                    ->formatStateUsing(function ($state) {
-                        if (is_array($state) && (isset($state['es']) || isset($state['en']))) {
-                            $list = $state['es'] ?? $state['en'] ?? [];
-                            return is_array($list) ? count($list) . ' items' : '0 items';
-                        }
-                        return is_array($state) ? count($state) . ' items' : '0 items';
-                    }),
-
-                Tables\Columns\TextColumn::make('not_included')
-                    ->label('Not included (ES)')
-                    ->formatStateUsing(function ($state) {
-                        if (is_array($state) && (isset($state['es']) || isset($state['en']))) {
-                            $list = $state['es'] ?? $state['en'] ?? [];
-                            return is_array($list) ? count($list) . ' items' : '0 items';
-                        }
-                        return is_array($state) ? count($state) . ' items' : '0 items';
-                    }),
 
                 Tables\Columns\TextColumn::make('updated_at')->dateTime(),
             ])

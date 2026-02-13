@@ -13,7 +13,7 @@ class CreateTour extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        // MAIN IMAGE (local -> s3)
+        // MAIN IMAGE: viene de local uploads/tours/main/...
         if (!empty($data['main_image_url']) && is_string($data['main_image_url'])) {
             $localPath = $data['main_image_url'];
 
@@ -25,17 +25,19 @@ class CreateTour extends CreateRecord
                     Storage::disk('s3')->put(
                         $s3Path,
                         Storage::disk('local')->get($localPath),
-                        ['visibility' => 'public']
+                        [
+                            'visibility' => 'public',
+                            'ACL' => 'public-read',
+                        ]
                     );
 
                     Storage::disk('local')->delete($localPath);
-
                     $data['main_image_url'] = $s3Path;
                 }
             }
         }
 
-        // GALLERY IMAGES (local -> s3)
+        // GALLERY: images[].url viene de local uploads/tours/gallery/...
         if (!empty($data['images']) && is_array($data['images'])) {
             foreach ($data['images'] as $i => $img) {
                 if (empty($img['url']) || !is_string($img['url'])) {
@@ -52,11 +54,13 @@ class CreateTour extends CreateRecord
                         Storage::disk('s3')->put(
                             $s3Path,
                             Storage::disk('local')->get($localPath),
-                            ['visibility' => 'public']
+                            [
+                                'visibility' => 'public',
+                                'ACL' => 'public-read',
+                            ]
                         );
 
                         Storage::disk('local')->delete($localPath);
-
                         $data['images'][$i]['url'] = $s3Path;
                     }
                 }

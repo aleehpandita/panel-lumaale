@@ -13,16 +13,13 @@ class EditTour extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        $record = $this->getRecord();
+        $record = $this->record;
 
-        // MAIN IMAGE: si no subiste una nueva, no lo borres ni lo cambies
-        if (empty($data['main_image_url'])) {
-            $data['main_image_url'] = $record->main_image_url;
-        } else {
+        // MAIN IMAGE
+        if (!empty($data['main_image_url']) && is_string($data['main_image_url'])) {
             $localPath = $data['main_image_url'];
 
-            // si viene de local, súbelo a S3
-            if (is_string($localPath) && Str::startsWith($localPath, 'uploads/')) {
+            if (Str::startsWith($localPath, 'uploads/')) {
                 if (Storage::disk('local')->exists($localPath)) {
                     $ext = pathinfo($localPath, PATHINFO_EXTENSION) ?: 'webp';
                     $s3Path = 'tours/main/' . Str::uuid() . '.' . $ext;
@@ -30,12 +27,15 @@ class EditTour extends EditRecord
                     Storage::disk('s3')->put(
                         $s3Path,
                         Storage::disk('local')->get($localPath),
-                        ['visibility' => 'public']
+                        [
+                            'visibility' => 'public',
+                            'ACL' => 'public-read',
+                        ]
                     );
 
                     Storage::disk('local')->delete($localPath);
 
-                    // opcional: borrar anterior en S3 si existía
+                    // borrar anterior si existía
                     if (!empty($record->main_image_url) && is_string($record->main_image_url)) {
                         Storage::disk('s3')->delete($record->main_image_url);
                     }
@@ -45,7 +45,7 @@ class EditTour extends EditRecord
             }
         }
 
-        // GALLERY: convertir solo los que vengan de local
+        // GALLERY
         if (!empty($data['images']) && is_array($data['images'])) {
             foreach ($data['images'] as $i => $img) {
                 if (empty($img['url']) || !is_string($img['url'])) {
@@ -62,11 +62,13 @@ class EditTour extends EditRecord
                         Storage::disk('s3')->put(
                             $s3Path,
                             Storage::disk('local')->get($localPath),
-                            ['visibility' => 'public']
+                            [
+                                'visibility' => 'public',
+                                'ACL' => 'public-read',
+                            ]
                         );
 
                         Storage::disk('local')->delete($localPath);
-
                         $data['images'][$i]['url'] = $s3Path;
                     }
                 }
