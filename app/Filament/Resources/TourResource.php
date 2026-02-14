@@ -28,7 +28,7 @@ class TourResource extends Resource
      */
     protected static function repeaterToStringArray(?array $state): array
     {
-        if (! is_array($state)) return [];
+        if (!is_array($state)) return [];
 
         if (isset($state[0]) && is_string($state[0])) {
             return array_values(array_filter($state));
@@ -41,11 +41,11 @@ class TourResource extends Resource
     }
 
     /**
-     * Convierte ["A","B"] -> [{item:"A"},{item:"B"}] (para pintar el repeater)
+     * Convierte ["A","B"] -> [{item:"A"},{item:"B"}]
      */
     protected static function stringArrayToRepeater(?array $state): array
     {
-        if (! is_array($state)) return [];
+        if (!is_array($state)) return [];
 
         if (isset($state[0]) && is_array($state[0]) && array_key_exists('item', $state[0])) {
             return $state;
@@ -202,21 +202,22 @@ class TourResource extends Resource
                                 return '-';
                             }
 
-                            // Ya guardada en S3 como "tours/main/..."
-                            if (str_starts_with($record->main_image_url, 'tours/')) {
-                                $url = Storage::disk('s3')->url($record->main_image_url);
-                                return new HtmlString('<img src="'.$url.'" style="height:80px;border-radius:8px" />');
-                            }
+                            $disk = Storage::disk('s3');
 
-                            return '-';
+                            // Si S3 está privado, esto es lo correcto:
+                            $url = method_exists($disk, 'temporaryUrl')
+                                ? $disk->temporaryUrl($record->main_image_url, now()->addMinutes(10))
+                                : $disk->url($record->main_image_url);
+
+                            return new HtmlString('<img src="'.$url.'" style="height:80px;border-radius:8px" />');
                         }),
 
                     Forms\Components\FileUpload::make('main_image_url')
                         ->label('Imagen principal')
                         ->image()
                         ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                        ->disk('public') // ✅ para que Filament pueda previsualizar sin 404
-                        ->directory('uploads/tours/main') // storage/app/public/uploads/tours/main
+                        ->disk('local') // igual que Destinations
+                        ->directory('uploads/tours/main') // primero local
                         ->visibility('public')
                         ->preserveFilenames(false)
                         ->dehydrated(true)
@@ -234,11 +235,23 @@ class TourResource extends Resource
                                     $state = $get('url');
                                     if (! $state) return '-';
 
-                                    // Ya en S3
-                                    if (str_starts_with($state, 'tours/')) {
-                                        $url = Storage::disk('s3')->url($state);
+                                    // Ya guardado en S3 como "tours/..."
+                                    if (is_string($state) && str_starts_with($state, 'tours/')) {
+                                        $disk = Storage::disk('s3');
+
+                                        $url = method_exists($disk, 'temporaryUrl')
+                                            ? $disk->temporaryUrl($state, now()->addMinutes(10))
+                                            : $disk->url($state);
+
                                         return new HtmlString(
-                                            '<img src="'.$url.'" style="max-width:160px; height:auto; border-radius:8px; border:1px solid #e5e7eb;" />'
+                                            '<img src="'.$url.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
+                                        );
+                                    }
+
+                                    // Si por alguna razón viene absoluta
+                                    if (is_string($state) && str_starts_with($state, 'http')) {
+                                        return new HtmlString(
+                                            '<img src="'.$state.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
                                         );
                                     }
 
@@ -249,15 +262,15 @@ class TourResource extends Resource
                                 ->label('Imagen')
                                 ->image()
                                 ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                                ->disk('public') // ✅ para preview correcto
-                                ->directory('uploads/tours/gallery') // storage/app/public/uploads/tours/gallery
+                                ->disk('local') // primero local
+                                ->directory('uploads/tours/gallery')
                                 ->visibility('public')
                                 ->preserveFilenames(false)
                                 ->dehydrated(true)
                                 ->maxSize(4096)
                                 ->required(),
 
-                            TextInput::make('sort_order')
+                            Forms\Components\TextInput::make('sort_order')
                                 ->numeric()
                                 ->default(0),
                         ])
@@ -314,6 +327,7 @@ class TourResource extends Resource
 
                 Tables\Columns\TextColumn::make('city')->sortable(),
                 Tables\Columns\TextColumn::make('status')->badge(),
+
                 Tables\Columns\TextColumn::make('updated_at')->dateTime(),
             ])
             ->actions([
