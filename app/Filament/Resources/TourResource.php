@@ -13,10 +13,11 @@ use Illuminate\Support\Str;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Get;
+use Filament\Forms\Components\Placeholder;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Storage;
+use Filament\Forms\Components\FileUpload;
 
 class TourResource extends Resource
 {
@@ -30,10 +31,12 @@ class TourResource extends Resource
     {
         if (!is_array($state)) return [];
 
+        // Si ya viene como ["A","B"], lo dejamos
         if (isset($state[0]) && is_string($state[0])) {
             return array_values(array_filter($state));
         }
 
+        // Si viene como [{item:"A"}...]
         return array_values(array_filter(array_map(
             fn ($row) => is_array($row) ? ($row['item'] ?? null) : null,
             $state
@@ -41,57 +44,20 @@ class TourResource extends Resource
     }
 
     /**
-     * Convierte ["A","B"] -> [{item:"A"},{item:"B"}]
+     * Convierte ["A","B"] -> [{item:"A"},{item:"B"}] (para que el repeater lo pinte)
      */
     protected static function stringArrayToRepeater(?array $state): array
     {
         if (!is_array($state)) return [];
 
+        // Si ya es repeater [{item:"A"}], lo dejamos
         if (isset($state[0]) && is_array($state[0]) && array_key_exists('item', $state[0])) {
             return $state;
         }
 
         return array_map(fn ($v) => ['item' => $v], array_values(array_filter($state)));
     }
-protected static function moveLocalToS3(?string $path, string $prefix): ?string
-{
-    if (! $path) return null;
 
-    // ya está en S3
-    if (str_starts_with($path, 'tours/')) {
-        return $path;
-    }
-
-    // solo movemos uploads/...
-    if (! str_starts_with($path, 'uploads/')) {
-        return $path;
-    }
-
-    if (! Storage::disk('local')->exists($path)) {
-        return $path;
-    }
-
-    $ext = pathinfo($path, PATHINFO_EXTENSION) ?: 'webp';
-    $key = rtrim($prefix, '/') . '/' . Str::uuid() . '.' . $ext;
-
-    $stream = Storage::disk('local')->readStream($path);
-
-    Storage::disk('s3')->put($key, $stream, [
-        'visibility' => 'public',
-        'ContentType' => match (strtolower($ext)) {
-            'jpg', 'jpeg' => 'image/jpeg',
-            'png' => 'image/png',
-            'webp' => 'image/webp',
-            default => 'application/octet-stream',
-        },
-    ]);
-
-    if (is_resource($stream)) fclose($stream);
-
-    Storage::disk('local')->delete($path);
-
-    return $key;
-}
     public static function form(Form $form): Form
     {
         return $form->schema([
@@ -222,7 +188,7 @@ protected static function moveLocalToS3(?string $path, string $prefix): ?string
                     TextInput::make('duration_hours')->numeric(),
                     TextInput::make('min_people')->numeric()->default(1),
                     TextInput::make('max_people')->numeric(),
-
+                    
                     Select::make('categories')
                         ->relationship('categories', 'name')
                         ->multiple()
@@ -232,92 +198,78 @@ protected static function moveLocalToS3(?string $path, string $prefix): ?string
                 ->columns(2),
 
             Forms\Components\Section::make('Imagen principal')
-                ->schema([
-                    Placeholder::make('main_image_current')
-                        ->label('Imagen actual')
-                        ->content(function (?Tour $record) {
-                            if (! $record || ! $record->main_image_url) {
-                                return '-';
-                            }
-
-                            $disk = Storage::disk('s3');
-
-                            // Si S3 está privado, esto es lo correcto:
-                            $url = method_exists($disk, 'temporaryUrl')
-                                ? $disk->temporaryUrl($record->main_image_url, now()->addMinutes(10))
-                                : $disk->url($record->main_image_url);
-
-                            return new HtmlString('<img src="'.$url.'" style="height:80px;border-radius:8px" />');
-                        }),
-
-                    Forms\Components\FileUpload::make('main_image_url')
-                        ->label('Imagen principal')
-                        ->image()
-                        ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                        ->disk('local') // igual que Destinations
-                        ->directory('uploads/tours/main') // primero local
-                        ->visibility('public')
-                        ->preserveFilenames(false)
-                        ->dehydrated(true)
-                        ->columnSpanFull(),
-                ]),
-
-           Forms\Components\Section::make('Galería')
     ->schema([
-        Repeater::make('images')
-            ->relationship()
-            ->schema([
-                Placeholder::make('current_gallery_image')
-                    ->label('Imagen actual')
-                    ->content(function (Get $get) {
-                        $state = $get('url');
-                        if (! $state) return '-';
+        Placeholder::make('main_image_current')
+            ->label('Imagen actual')
+            ->content(function (?Tour $record) {
+                if (! $record || ! $record->main_image_url) {
+                    return '-';
+                }
 
-                        if (str_starts_with($state, 'tours/')) {
-                            $url = Storage::disk('s3')->url($state);
-                            return new HtmlString(
-                                '<img src="'.$url.'" style="max-width:160px; height:auto; border-radius:8px; border:1px solid #e5e7eb;" />'
-                            );
-                        }
+                $url = Storage::disk('s3')->url($record->main_image_url);
 
-                        return '-';
-                    }),
-
-                Forms\Components\FileUpload::make('url')
-                    ->label('Imagen')
-                    ->image()
-                    ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                    ->disk('local')
-                    ->directory('uploads/tours/gallery')
-                    ->visibility('public')
-                    ->preserveFilenames(false)
-                    ->dehydrated(true)
-                    ->maxSize(4096)
-                    ->required(),
-
-                TextInput::make('sort_order')
-                    ->numeric()
-                    ->default(0),
-            ])
-            ->columns(2)
-            ->defaultItems(0)
-
-            // CREATE: mover a S3
-            ->mutateRelationshipDataBeforeCreateUsing(function (array $data): array {
-                $data['url'] = self::moveLocalToS3($data['url'] ?? null, 'tours/gallery');
-                return $data;
-            })
-
-            // UPDATE: mover a S3
-            ->mutateRelationshipDataBeforeUpdateUsing(function (array $data): array {
-                $data['url'] = self::moveLocalToS3($data['url'] ?? null, 'tours/gallery');
-                return $data;
+                return new HtmlString('<img src="'.$url.'" style="height:80px;border-radius:8px" />');
             }),
+
+        FileUpload::make('main_image_url')
+            ->label('Imagen principal')
+            ->image()
+            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+            ->disk('local')
+            ->directory('uploads/tours/main')
+            ->visibility('public')
+            ->preserveFilenames(false)
+            ->dehydrated(true)
+            ->columnSpanFull(),
     ]),
+
+Forms\Components\Repeater::make('images')
+    ->relationship()
+    ->schema([
+        Placeholder::make('current_gallery_image')
+            ->label('Imagen actual')
+            ->content(function (Get $get) {
+                $state = $get('url');
+                if (! $state) return '-';
+
+                if (str_starts_with($state, 'tours/')) {
+                    $url = Storage::disk('s3')->url($state);
+                    return new \Illuminate\Support\HtmlString(
+                        '<img src="'.$url.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
+                    );
+                }
+
+                if (str_starts_with($state, 'http')) {
+                    return new \Illuminate\Support\HtmlString(
+                        '<img src="'.$state.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
+                    );
+                }
+
+                return '-';
+            }),
+
+        Forms\Components\FileUpload::make('url')
+            ->label('Imagen')
+            ->image()
+            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+            ->disk('local')
+            ->directory('uploads/tours/gallery')
+            ->visibility('public')
+            ->preserveFilenames(false)
+            ->dehydrated(true)
+            ->maxSize(4096)
+            ->required(),
+
+        Forms\Components\TextInput::make('sort_order')
+            ->numeric()
+            ->default(0),
+    ])
+    ->columns(2)
+    ->defaultItems(0),
 
             Forms\Components\Section::make('Horarios (si aplica)')
                 ->schema([
-                    Repeater::make('departures')
+                    Forms\Components\Repeater::make('departures')
                         ->relationship()
                         ->schema([
                             Forms\Components\TimePicker::make('departure_time')->required(),
@@ -329,7 +281,7 @@ protected static function moveLocalToS3(?string $path, string $prefix): ?string
 
             Forms\Components\Section::make('Precios (flexible)')
                 ->schema([
-                    Repeater::make('prices')
+                    Forms\Components\Repeater::make('prices')
                         ->relationship()
                         ->schema([
                             Forms\Components\TextInput::make('name')->placeholder('Tarifa base / Temporada alta'),
@@ -356,6 +308,7 @@ protected static function moveLocalToS3(?string $path, string $prefix): ?string
     {
         return $table
             ->columns([
+                // Mostramos el título ES como default en el admin
                 Tables\Columns\TextColumn::make('title')
                     ->label('Title (ES)')
                     ->formatStateUsing(fn ($state) => is_array($state) ? ($state['es'] ?? $state['en'] ?? '') : (string) $state)
@@ -364,6 +317,26 @@ protected static function moveLocalToS3(?string $path, string $prefix): ?string
 
                 Tables\Columns\TextColumn::make('city')->sortable(),
                 Tables\Columns\TextColumn::make('status')->badge(),
+
+                Tables\Columns\TextColumn::make('included')
+                    ->label('Included (ES)')
+                    ->formatStateUsing(function ($state) {
+                        if (is_array($state) && (isset($state['es']) || isset($state['en']))) {
+                            $list = $state['es'] ?? $state['en'] ?? [];
+                            return is_array($list) ? count($list) . ' items' : '0 items';
+                        }
+                        return is_array($state) ? count($state) . ' items' : '0 items';
+                    }),
+
+                Tables\Columns\TextColumn::make('not_included')
+                    ->label('Not included (ES)')
+                    ->formatStateUsing(function ($state) {
+                        if (is_array($state) && (isset($state['es']) || isset($state['en']))) {
+                            $list = $state['es'] ?? $state['en'] ?? [];
+                            return is_array($list) ? count($list) . ' items' : '0 items';
+                        }
+                        return is_array($state) ? count($state) . ' items' : '0 items';
+                    }),
 
                 Tables\Columns\TextColumn::make('updated_at')->dateTime(),
             ])
