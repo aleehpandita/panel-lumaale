@@ -6,7 +6,6 @@ use App\Filament\Resources\TourResource\Pages;
 use App\Models\Tour;
 use Filament\Forms;
 use Filament\Forms\Form;
-use Filament\Forms\Get;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -15,6 +14,7 @@ use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Get;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Storage;
 
@@ -28,7 +28,7 @@ class TourResource extends Resource
      */
     protected static function repeaterToStringArray(?array $state): array
     {
-        if (! is_array($state)) return [];
+        if (!is_array($state)) return [];
 
         if (isset($state[0]) && is_string($state[0])) {
             return array_values(array_filter($state));
@@ -45,7 +45,7 @@ class TourResource extends Resource
      */
     protected static function stringArrayToRepeater(?array $state): array
     {
-        if (! is_array($state)) return [];
+        if (!is_array($state)) return [];
 
         if (isset($state[0]) && is_array($state[0]) && array_key_exists('item', $state[0])) {
             return $state;
@@ -202,21 +202,22 @@ class TourResource extends Resource
                                 return '-';
                             }
 
-                            // Si ya está en S3 (tours/...)
-                            if (str_starts_with($record->main_image_url, 'tours/')) {
-                                $url = Storage::disk('s3')->url($record->main_image_url);
-                                return new HtmlString('<img src="'.$url.'" style="height:80px;border-radius:8px" />');
-                            }
+                            $disk = Storage::disk('s3');
 
-                            return '-';
+                            // Si S3 está privado, esto es lo correcto:
+                            $url = method_exists($disk, 'temporaryUrl')
+                                ? $disk->temporaryUrl($record->main_image_url, now()->addMinutes(10))
+                                : $disk->url($record->main_image_url);
+
+                            return new HtmlString('<img src="'.$url.'" style="height:80px;border-radius:8px" />');
                         }),
 
                     Forms\Components\FileUpload::make('main_image_url')
                         ->label('Imagen principal')
                         ->image()
                         ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                        ->disk('local')
-                        ->directory('uploads/tours/main')
+                        ->disk('local') // igual que Destinations
+                        ->directory('uploads/tours/main') // primero local
                         ->visibility('public')
                         ->preserveFilenames(false)
                         ->dehydrated(true)
@@ -226,7 +227,7 @@ class TourResource extends Resource
             Forms\Components\Section::make('Galería')
                 ->schema([
                     Repeater::make('images')
-                        ->relationship() // usa relación "images" del modelo Tour
+                        ->relationship()
                         ->schema([
                             Placeholder::make('current_gallery_image')
                                 ->label('Imagen actual')
@@ -234,14 +235,20 @@ class TourResource extends Resource
                                     $state = $get('url');
                                     if (! $state) return '-';
 
+                                    // Ya guardado en S3 como "tours/..."
                                     if (is_string($state) && str_starts_with($state, 'tours/')) {
-                                        $url = Storage::disk('s3')->url($state);
+                                        $disk = Storage::disk('s3');
+
+                                        $url = method_exists($disk, 'temporaryUrl')
+                                            ? $disk->temporaryUrl($state, now()->addMinutes(10))
+                                            : $disk->url($state);
+
                                         return new HtmlString(
                                             '<img src="'.$url.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
                                         );
                                     }
 
-                                    // si quedó una url absoluta por alguna razón
+                                    // Si por alguna razón viene absoluta
                                     if (is_string($state) && str_starts_with($state, 'http')) {
                                         return new HtmlString(
                                             '<img src="'.$state.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
@@ -255,7 +262,7 @@ class TourResource extends Resource
                                 ->label('Imagen')
                                 ->image()
                                 ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                                ->disk('local')
+                                ->disk('local') // primero local
                                 ->directory('uploads/tours/gallery')
                                 ->visibility('public')
                                 ->preserveFilenames(false)
@@ -263,7 +270,7 @@ class TourResource extends Resource
                                 ->maxSize(4096)
                                 ->required(),
 
-                            TextInput::make('sort_order')
+                            Forms\Components\TextInput::make('sort_order')
                                 ->numeric()
                                 ->default(0),
                         ])
@@ -288,19 +295,19 @@ class TourResource extends Resource
                     Repeater::make('prices')
                         ->relationship()
                         ->schema([
-                            TextInput::make('name')->placeholder('Tarifa base / Temporada alta'),
+                            Forms\Components\TextInput::make('name')->placeholder('Tarifa base / Temporada alta'),
                             Forms\Components\DatePicker::make('start_date')->nullable(),
                             Forms\Components\DatePicker::make('end_date')->nullable(),
 
-                            TextInput::make('price_adult')->numeric()->required(),
+                            Forms\Components\TextInput::make('price_adult')->numeric()->required(),
 
-                            TextInput::make('price_child')->numeric()->nullable()
+                            Forms\Components\TextInput::make('price_child')->numeric()->nullable()
                                 ->helperText('NULL = no niños, 0 = gratis, >0 = paga'),
 
-                            TextInput::make('price_infant')->numeric()->nullable()
+                            Forms\Components\TextInput::make('price_infant')->numeric()->nullable()
                                 ->helperText('NULL = no infantes, 0 = gratis, >0 = paga'),
 
-                            TextInput::make('currency')->default('USD')->maxLength(3),
+                            Forms\Components\TextInput::make('currency')->default('USD')->maxLength(3),
                         ])
                         ->columns(3)
                         ->defaultItems(1),
@@ -312,11 +319,6 @@ class TourResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\ImageColumn::make('main_image_url')
-                    ->label('Imagen')
-                    ->disk('s3')
-                    ->height(50),
-
                 Tables\Columns\TextColumn::make('title')
                     ->label('Title (ES)')
                     ->formatStateUsing(fn ($state) => is_array($state) ? ($state['es'] ?? $state['en'] ?? '') : (string) $state)
