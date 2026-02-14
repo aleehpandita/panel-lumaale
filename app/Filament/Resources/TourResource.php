@@ -13,8 +13,8 @@ use Illuminate\Support\Str;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Get;
 use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Get;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Storage;
 
@@ -23,9 +23,12 @@ class TourResource extends Resource
     protected static ?string $model = Tour::class;
     protected static ?string $navigationIcon = 'heroicon-o-map';
 
+    /**
+     * Convierte repeater [{item:"A"},{item:"B"}] -> ["A","B"]
+     */
     protected static function repeaterToStringArray(?array $state): array
     {
-        if (!is_array($state)) return [];
+        if (! is_array($state)) return [];
 
         if (isset($state[0]) && is_string($state[0])) {
             return array_values(array_filter($state));
@@ -37,63 +40,18 @@ class TourResource extends Resource
         )));
     }
 
+    /**
+     * Convierte ["A","B"] -> [{item:"A"},{item:"B"}] (para pintar el repeater)
+     */
     protected static function stringArrayToRepeater(?array $state): array
     {
-        if (!is_array($state)) return [];
+        if (! is_array($state)) return [];
 
         if (isset($state[0]) && is_array($state[0]) && array_key_exists('item', $state[0])) {
             return $state;
         }
 
         return array_map(fn ($v) => ['item' => $v], array_values(array_filter($state)));
-    }
-
-    /**
-     * Mueve un archivo desde disk local (uploads/...) a S3 (tours/...)
-     * y regresa la key final en S3.
-     */
-    protected static function moveLocalToS3(?string $path, string $prefix): ?string
-    {
-        if (! $path) return null;
-
-        // Ya está en S3 (lo dejamos)
-        if (str_starts_with($path, 'tours/')) {
-            return $path;
-        }
-
-        // Solo movemos paths locales tipo "uploads/..."
-        if (! str_starts_with($path, 'uploads/')) {
-            return $path;
-        }
-
-        if (! Storage::disk('local')->exists($path)) {
-            // Si no existe local, no inventamos nada: dejamos el valor tal cual.
-            return $path;
-        }
-
-        $ext = pathinfo($path, PATHINFO_EXTENSION) ?: 'webp';
-        $key = rtrim($prefix, '/') . '/' . Str::uuid() . '.' . $ext;
-
-        $stream = Storage::disk('local')->readStream($path);
-
-        Storage::disk('s3')->put($key, $stream, [
-            'visibility' => 'public', // igual que destinations (si tu bucket sirve público)
-            'ContentType' => match (strtolower($ext)) {
-                'jpg', 'jpeg' => 'image/jpeg',
-                'png' => 'image/png',
-                'webp' => 'image/webp',
-                default => 'application/octet-stream',
-            },
-        ]);
-
-        if (is_resource($stream)) {
-            fclose($stream);
-        }
-
-        // Limpieza local (opcional pero recomendado)
-        Storage::disk('local')->delete($path);
-
-        return $key;
     }
 
     public static function form(Form $form): Form
@@ -240,19 +198,25 @@ class TourResource extends Resource
                     Placeholder::make('main_image_current')
                         ->label('Imagen actual')
                         ->content(function (?Tour $record) {
-                            if (! $record || ! $record->main_image_url) return '-';
+                            if (! $record || ! $record->main_image_url) {
+                                return '-';
+                            }
 
-                            $url = Storage::disk('s3')->url($record->main_image_url);
+                            // Ya guardada en S3 como "tours/main/..."
+                            if (str_starts_with($record->main_image_url, 'tours/')) {
+                                $url = Storage::disk('s3')->url($record->main_image_url);
+                                return new HtmlString('<img src="'.$url.'" style="height:80px;border-radius:8px" />');
+                            }
 
-                            return new HtmlString('<img src="'.$url.'" style="height:80px;border-radius:8px" />');
+                            return '-';
                         }),
 
                     Forms\Components\FileUpload::make('main_image_url')
                         ->label('Imagen principal')
                         ->image()
                         ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                        ->disk('s3')                 // ✅ directo a S3 (ya te funciona)
-                        ->directory('tours/main')    // ✅ crea tours/main/
+                        ->disk('public') // ✅ para que Filament pueda previsualizar sin 404
+                        ->directory('uploads/tours/main') // storage/app/public/uploads/tours/main
                         ->visibility('public')
                         ->preserveFilenames(false)
                         ->dehydrated(true)
@@ -270,6 +234,7 @@ class TourResource extends Resource
                                     $state = $get('url');
                                     if (! $state) return '-';
 
+                                    // Ya en S3
                                     if (str_starts_with($state, 'tours/')) {
                                         $url = Storage::disk('s3')->url($state);
                                         return new HtmlString(
@@ -284,12 +249,11 @@ class TourResource extends Resource
                                 ->label('Imagen')
                                 ->image()
                                 ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-                                ->disk('local') // ✅ sube a local primero (no dependemos de livewire-tmp en s3)
-                                ->directory('uploads/tours/gallery')
+                                ->disk('public') // ✅ para preview correcto
+                                ->directory('uploads/tours/gallery') // storage/app/public/uploads/tours/gallery
                                 ->visibility('public')
                                 ->preserveFilenames(false)
                                 ->dehydrated(true)
-                                ->imageEditor()
                                 ->maxSize(4096)
                                 ->required(),
 
@@ -298,17 +262,7 @@ class TourResource extends Resource
                                 ->default(0),
                         ])
                         ->columns(2)
-                        ->defaultItems(0)
-
-                        // ✅ AQUÍ está la magia: al guardar relación, movemos a S3 y guardamos "tours/gallery/..."
-                        ->mutateRelationshipDataBeforeCreateUsing(function (array $data): array {
-                            $data['url'] = self::moveLocalToS3($data['url'] ?? null, 'tours/gallery');
-                            return $data;
-                        })
-                        ->mutateRelationshipDataBeforeSaveUsing(function (array $data): array {
-                            $data['url'] = self::moveLocalToS3($data['url'] ?? null, 'tours/gallery');
-                            return $data;
-                        }),
+                        ->defaultItems(0),
                 ]),
 
             Forms\Components\Section::make('Horarios (si aplica)')
@@ -328,19 +282,19 @@ class TourResource extends Resource
                     Repeater::make('prices')
                         ->relationship()
                         ->schema([
-                            TextInput::make('name')->placeholder('Tarifa base / Temporada alta'),
+                            Forms\Components\TextInput::make('name')->placeholder('Tarifa base / Temporada alta'),
                             Forms\Components\DatePicker::make('start_date')->nullable(),
                             Forms\Components\DatePicker::make('end_date')->nullable(),
 
-                            TextInput::make('price_adult')->numeric()->required(),
+                            Forms\Components\TextInput::make('price_adult')->numeric()->required(),
 
-                            TextInput::make('price_child')->numeric()->nullable()
+                            Forms\Components\TextInput::make('price_child')->numeric()->nullable()
                                 ->helperText('NULL = no niños, 0 = gratis, >0 = paga'),
 
-                            TextInput::make('price_infant')->numeric()->nullable()
+                            Forms\Components\TextInput::make('price_infant')->numeric()->nullable()
                                 ->helperText('NULL = no infantes, 0 = gratis, >0 = paga'),
 
-                            TextInput::make('currency')->default('USD')->maxLength(3),
+                            Forms\Components\TextInput::make('currency')->default('USD')->maxLength(3),
                         ])
                         ->columns(3)
                         ->defaultItems(1),
