@@ -22,37 +22,7 @@ class TourResource extends Resource
 {
     protected static ?string $model = Tour::class;
     protected static ?string $navigationIcon = 'heroicon-o-map';
-    protected static function s3Url(string $path): string
-    {
-        $disk = Storage::disk('s3');
 
-        // Si el bucket es privado, esto genera URL firmada (lo más seguro).
-        if (method_exists($disk, 'temporaryUrl')) {
-            return $disk->temporaryUrl($path, now()->addMinutes(10));
-        }
-
-        return $disk->url($path);
-    }
-
-    protected static function uploadedFileUrl(?string $file): ?string
-    {
-        if (! $file) {
-            return null;
-        }
-
-        // Si ya está guardado como key de S3 (ej: tours/gallery/xxx.webp)
-        if (str_starts_with($file, 'tours/')) {
-            return self::s3Url($file);
-        }
-
-        // Si por alguna razón aún viene de local (uploads/...)
-        // OJO: esto solo sirve si tienes el symlink storage:link y el disco public bien.
-        if (str_starts_with($file, 'uploads/')) {
-            return Storage::disk('public')->url($file);
-        }
-
-        return $file; // si fuera URL absoluta
-    }
     /**
      * Convierte repeater [{item:"A"},{item:"B"}] -> ["A","B"]
      */
@@ -298,7 +268,6 @@ class TourResource extends Resource
                                 ->preserveFilenames(false)
                                 ->dehydrated(true)
                                 ->maxSize(4096)
-                                ->getUploadedFileUrlUsing(fn (?string $file) => self::uploadedFileUrl($file))
                                 ->required(),
 
                             Forms\Components\TextInput::make('sort_order')
