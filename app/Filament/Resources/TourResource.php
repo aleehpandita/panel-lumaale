@@ -300,7 +300,8 @@ class TourResource extends Resource
                                 ->preserveFilenames(false)
                                 ->dehydrated(true)
                                 ->maxSize(4096)
-                                ->required(),
+                                ->required()
+                                ->getUploadedFileUrlUsing(fn (?string $file) => self::uploadedFileUrl($file)),
 
                             Forms\Components\TextInput::make('sort_order')
                                 ->numeric()
