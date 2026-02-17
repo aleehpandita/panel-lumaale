@@ -3,8 +3,8 @@
 namespace App\Filament\Resources\TourResource\Pages;
 
 use App\Filament\Resources\TourResource;
+use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -12,72 +12,80 @@ class EditTour extends EditRecord
 {
     protected static string $resource = TourResource::class;
 
-    protected function mutateFormDataBeforeSave(array $data): array
+    protected function getHeaderActions(): array
     {
-        $record = $this->getRecord();
+        return [
+            Actions\DeleteAction::make(),
+        ];
+    }
 
-        // MAIN IMAGE
-        if (empty($data['main_image_url'])) {
-            $data['main_image_url'] = $record->main_image_url;
-        } else {
-            $localPath = $data['main_image_url'];
+    /**
+     * Mueve uploads/... (local) => tours/... (s3)
+     */
+    protected function moveLocalToS3(?string $path, string $prefix): ?string
+    {
+        if (! $path) return null;
 
-            if (is_string($localPath) && Str::startsWith($localPath, 'uploads/') && Storage::disk('local')->exists($localPath)) {
-                $ext = pathinfo($localPath, PATHINFO_EXTENSION) ?: 'webp';
-                $s3Path = 'tours/main/' . Str::uuid() . '.' . $ext;
+        // ya está en S3
+        if (str_starts_with($path, 'tours/')) {
+            return $path;
+        }
 
-                $ok = Storage::disk('s3')->put($s3Path, Storage::disk('local')->get($localPath));
+        // solo movemos uploads/...
+        if (! str_starts_with($path, 'uploads/')) {
+            return $path;
+        }
 
-                if ($ok) {
-                    Storage::disk('local')->delete($localPath);
+        if (! Storage::disk('local')->exists($path)) {
+            return $path;
+        }
 
-                    // Borra anterior solo si el nuevo sí subió
-                    if (!empty($record->main_image_url) && is_string($record->main_image_url)) {
-                        Storage::disk('s3')->delete($record->main_image_url);
+        $ext = pathinfo($path, PATHINFO_EXTENSION) ?: 'webp';
+        $key = rtrim($prefix, '/') . '/' . (string) Str::uuid() . '.' . $ext;
+
+        $stream = Storage::disk('local')->readStream($path);
+
+        Storage::disk('s3')->put($key, $stream, [
+            'visibility' => 'public',
+            'ContentType' => match (strtolower($ext)) {
+                'jpg', 'jpeg' => 'image/jpeg',
+                'png' => 'image/png',
+                'webp' => 'image/webp',
+                default => 'application/octet-stream',
+            },
+        ]);
+
+        if (is_resource($stream)) {
+            fclose($stream);
+        }
+
+        Storage::disk('local')->delete($path);
+
+        return $key;
+    }
+
+    /**
+     * Después de guardar el Tour y sus relaciones, movemos la galería a S3.
+     */
+    protected function afterSave(): void
+    {
+        $tour = $this->record;
+
+        if (method_exists($tour, 'images')) {
+            $tour->load('images');
+
+            foreach ($tour->images as $img) {
+                $old = $img->url ?? null;
+
+                if (is_string($old) && str_starts_with($old, 'uploads/')) {
+                    $new = $this->moveLocalToS3($old, 'tours/gallery');
+
+                    if ($new && $new !== $old) {
+                        $img->url = $new;
+                        $img->save();
                     }
-
-                    $data['main_image_url'] = $s3Path;
-                } else {
-                    Log::error('S3 PUT FAILED (main_image_url edit)', [
-                        'local' => $localPath,
-                        's3' => $s3Path,
-                        'record_id' => $record->id ?? null,
-                    ]);
-
-                    // No rompas: conserva el anterior
-                    $data['main_image_url'] = $record->main_image_url;
                 }
             }
         }
-
-        // GALLERY
-        if (!empty($data['images']) && is_array($data['images'])) {
-            foreach ($data['images'] as $i => $img) {
-                if (empty($img['url']) || !is_string($img['url'])) continue;
-
-                $localPath = $img['url'];
-
-                if (Str::startsWith($localPath, 'uploads/') && Storage::disk('local')->exists($localPath)) {
-                    $ext = pathinfo($localPath, PATHINFO_EXTENSION) ?: 'webp';
-                    $s3Path = 'tours/gallery/' . Str::uuid() . '.' . $ext;
-
-                    $ok = Storage::disk('s3')->put($s3Path, Storage::disk('local')->get($localPath));
-
-                    if ($ok) {
-                        Storage::disk('local')->delete($localPath);
-                        $data['images'][$i]['url'] = $s3Path;
-                    } else {
-                        Log::error('S3 PUT FAILED (gallery edit)', [
-                            'local' => $localPath,
-                            's3' => $s3Path,
-                            'index' => $i,
-                            'record_id' => $record->id ?? null,
-                        ]);
-                    }
-                }
-            }
-        }
-
-        return $data;
     }
 }
