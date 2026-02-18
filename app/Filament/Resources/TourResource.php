@@ -17,6 +17,8 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Get;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Storage;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+
 
 class TourResource extends Resource
 {
@@ -35,25 +37,48 @@ class TourResource extends Resource
         return $disk->url($path);
     }
 
-    protected static function uploadedFileUrl(?string $file): ?string
-    {
-        if (! $file) {
-            return null;
-        }
-
-        // Si ya está guardado como key de S3 (ej: tours/gallery/xxx.webp)
-        if (str_starts_with($file, 'tours/')) {
-            return self::s3Url($file);
-        }
-
-        // Si por alguna razón aún viene de local (uploads/...)
-        // OJO: esto solo sirve si tienes el symlink storage:link y el disco public bien.
-        if (str_starts_with($file, 'uploads/')) {
-            return Storage::disk('public')->url($file);
-        }
-
-        return $file; // si fuera URL absoluta
+   protected static function uploadedFileUrl($file): ?string
+{
+    if (blank($file)) {
+        return null;
     }
+
+    // A veces llega como array
+    if (is_array($file)) {
+        $file = $file[0] ?? null;
+        if (blank($file)) return null;
+    }
+
+    // A veces llega como TemporaryUploadedFile (objeto)
+    if ($file instanceof TemporaryUploadedFile) {
+        // Esto genera preview del temporal (no toca S3 final)
+        return $file->temporaryUrl();
+    }
+
+    // Ya debe ser string
+    if (! is_string($file)) {
+        return null;
+    }
+
+    // Ya está en S3 (guardado final)
+    if (str_starts_with($file, 'tours/')) {
+        return Storage::disk('s3')->url($file);
+    }
+
+    // Si todavía es local (uploads/...)
+    if (str_starts_with($file, 'uploads/')) {
+        // OJO: si NO tienes symlink /storage, esto puede dar 404.
+        // Pero por lo menos no revienta.
+        return Storage::disk('local')->url($file);
+    }
+
+    // Si guardaste una URL absoluta
+    if (str_starts_with($file, 'http')) {
+        return $file;
+    }
+
+    return null;
+}
 
     /**
      * Convierte repeater [{item:"A"},{item:"B"}] -> ["A","B"]
@@ -302,6 +327,7 @@ class TourResource extends Resource
                                 ->maxSize(4096)
                                 ->required()
                                 ->getUploadedFileUrlUsing(fn (?string $file) => self::uploadedFileUrl($file)),
+                                
 
                             Forms\Components\TextInput::make('sort_order')
                                 ->numeric()
