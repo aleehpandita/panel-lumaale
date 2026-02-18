@@ -349,9 +349,35 @@ class TourResource extends Resource
                     Repeater::make('images')
                         ->relationship()
                         ->schema([
-                        Placeholder::make('debug_url')
-                        ->reactive()
-                        ->content(fn (Get $get) => dd($get('url'))),
+                            Forms\Components\Hidden::make('id'),
+                            Placeholder::make('current_gallery_image')
+                                ->label('Imagen actual')
+                                ->reactive()
+                                ->content(function (Get $get) {
+                                    $imageId = $get('id');
+
+                                    if (! $imageId) {
+                                        return '-'; // todavía no guardas ese row (nuevo)
+                                    }
+
+                                    $img = \App\Models\TourImage::find($imageId);
+                                    if (! $img || blank($img->url)) {
+                                        return '-';
+                                    }
+
+                                    // aquí $img->url YA debe ser "tours/gallery/xxx.webp"
+                                    $path = $img->url;
+
+                                    $disk = Storage::disk('s3');
+                                    $url = method_exists($disk, 'temporaryUrl')
+                                        ? $disk->temporaryUrl($path, now()->addMinutes(10))
+                                        : $disk->url($path);
+
+                                    return new HtmlString(
+                                        '<img src="'.$url.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
+                                    );
+                                }),
+                        
                             Forms\Components\FileUpload::make('url')
                                 ->label('Imagen')
                                 ->image()
