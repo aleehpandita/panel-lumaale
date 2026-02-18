@@ -48,13 +48,11 @@ class TourResource extends Resource
         $file = $file[0] ?? null;
         if (blank($file)) return null;
     }
-
     // A veces llega como TemporaryUploadedFile (objeto)
     if ($file instanceof TemporaryUploadedFile) {
         // Esto genera preview del temporal (no toca S3 final)
         return $file->temporaryUrl();
     }
-
     // Ya debe ser string
     if (! is_string($file)) {
         return null;
@@ -326,7 +324,42 @@ class TourResource extends Resource
                                 ->dehydrated(true)
                                 ->maxSize(4096)
                                 ->required()
-                                ->getUploadedFileUrlUsing(fn (?string $file) => self::uploadedFileUrl($file)),
+                                 ->getUploadedFileUrlUsing(function ($file): ?string {
+                                    if (blank($file)) {
+                                        return null;
+                                    }
+
+                                    // A veces llega como array
+                                    if (is_array($file)) {
+                                        $file = $file[0] ?? null;
+                                        if (blank($file)) return null;
+                                    }
+
+                                    // Mientras está subiendo (Livewire temp)
+                                    if ($file instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile) {
+                                        return $file->temporaryUrl();
+                                    }
+
+                                    // Si ya está guardado como string en BD
+                                    if (! is_string($file)) {
+                                        return null;
+                                    }
+
+                                    // Si ya vive en S3 (tu caso final)
+                                    if (str_starts_with($file, 'tours/gallery/') || str_starts_with($file, 'tours/')) {
+                                        $disk = Storage::disk('s3');
+
+                                        // Si tu bucket es privado, esto ayuda (si está disponible)
+                                        if (method_exists($disk, 'temporaryUrl')) {
+                                            return $disk->temporaryUrl($file, now()->addMinutes(10));
+                                        }
+
+                                        return $disk->url($file);
+                                    }
+
+                                    // Si por alguna razón te queda un path local, deja que Filament intente su lógica normal
+                                    return null;
+                                }),
                                 
 
                             Forms\Components\TextInput::make('sort_order')
