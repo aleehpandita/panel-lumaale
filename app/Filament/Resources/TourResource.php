@@ -287,26 +287,29 @@ class TourResource extends Resource
                             Placeholder::make('current_gallery_image')
                                 ->label('Imagen actual')
                                 ->content(function (Get $get) {
-                                    $state = $get('url');
-                                    if (! $state) return '-';
+                                    $path = $get('url');
 
-                                    // Ya guardado en S3 como "tours/..."
-                                    if (is_string($state) && str_starts_with($state, 'tours/')) {
+                                    if (blank($path)) {
+                                        return '-';
+                                    }
+
+                                    // Si ya está en S3 como key (ej: tours/gallery/xxxx.webp)
+                                    if (is_string($path) && str_starts_with($path, 'tours/')) {
                                         $disk = Storage::disk('s3');
 
                                         $url = method_exists($disk, 'temporaryUrl')
-                                            ? $disk->temporaryUrl($state, now()->addMinutes(10))
-                                            : $disk->url($state);
+                                            ? $disk->temporaryUrl($path, now()->addMinutes(10))
+                                            : $disk->url($path);
 
                                         return new HtmlString(
                                             '<img src="'.$url.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
                                         );
                                     }
 
-                                    // Si por alguna razón viene absoluta
-                                    if (is_string($state) && str_starts_with($state, 'http')) {
+                                    // Si por alguna razón quedó una URL absoluta
+                                    if (is_string($path) && str_starts_with($path, 'http')) {
                                         return new HtmlString(
-                                            '<img src="'.$state.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
+                                            '<img src="'.$path.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
                                         );
                                     }
 
@@ -323,43 +326,7 @@ class TourResource extends Resource
                                 ->preserveFilenames(false)
                                 ->dehydrated(true)
                                 ->maxSize(4096)
-                                ->required()
-                                 ->getUploadedFileUrlUsing(function ($file): ?string {
-                                    if (blank($file)) {
-                                        return null;
-                                    }
-
-                                    // A veces llega como array
-                                    if (is_array($file)) {
-                                        $file = $file[0] ?? null;
-                                        if (blank($file)) return null;
-                                    }
-
-                                    // Mientras está subiendo (Livewire temp)
-                                    if ($file instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile) {
-                                        return $file->temporaryUrl();
-                                    }
-
-                                    // Si ya está guardado como string en BD
-                                    if (! is_string($file)) {
-                                        return null;
-                                    }
-
-                                    // Si ya vive en S3 (tu caso final)
-                                    if (str_starts_with($file, 'tours/gallery/') || str_starts_with($file, 'tours/')) {
-                                        $disk = Storage::disk('s3');
-
-                                        // Si tu bucket es privado, esto ayuda (si está disponible)
-                                        if (method_exists($disk, 'temporaryUrl')) {
-                                            return $disk->temporaryUrl($file, now()->addMinutes(10));
-                                        }
-
-                                        return $disk->url($file);
-                                    }
-
-                                    // Si por alguna razón te queda un path local, deja que Filament intente su lógica normal
-                                    return null;
-                                }),
+                                ->required(),
                                 
 
                             Forms\Components\TextInput::make('sort_order')
