@@ -388,17 +388,11 @@ class TourResource extends Resource
                                 ->preserveFilenames(false)
                                 ->dehydrated(true)
                                 ->maxSize(4096)
-                                // ✅ REGLA REAL:
-                                // - En create: siempre requerido
-                                // - En edit: requerido SOLO si este item NO tiene ya url en BD
-                                ->required(function ($record, string $operation): bool {
-                                    if ($operation === 'create') {
-                                        return true;
-                                    }
+                                  // ✅ CLAVE: si no subes nada en edit, NO mandar null y no sobreescribir la url en BD
+                                ->dehydrated(fn ($state) => filled($state))
 
-                                    // $record aquí es el registro de tour_images de ese renglón del repeater
-                                    return blank($record?->url);
-                                }),
+                                // ✅ Requerido SOLO si es un renglón nuevo (no tiene id aún)
+                                ->required(fn (Get $get) => blank($get('id'))),
                                 
 
                             Forms\Components\TextInput::make('sort_order')
