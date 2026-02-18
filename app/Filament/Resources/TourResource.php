@@ -350,17 +350,41 @@ class TourResource extends Resource
                     Repeater::make('images')
                         ->relationship()
                         ->schema([
-                           Placeholder::make('current_gallery_image')
+                          Placeholder::make('current_gallery_image')
                             ->label('Imagen actual')
                             ->content(function (Get $get) {
                                 $state = $get('url');
 
-                                $url = self::previewUrlFromState($state, 'tours/gallery/');
-                                if (! $url) return '-';
+                                // ✅ Filament a veces lo hidrata como array aunque sea single-file
+                                if (is_array($state)) {
+                                    $state = $state[0] ?? null;
+                                }
 
-                                return new HtmlString(
-                                    '<img src="'.$url.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
-                                );
+                                if (blank($state)) {
+                                    return '-';
+                                }
+
+                                // ✅ Si ya está guardado como key en S3 (tours/...)
+                                if (is_string($state) && str_starts_with($state, 'tours/')) {
+                                    $disk = Storage::disk('s3');
+
+                                    $url = method_exists($disk, 'temporaryUrl')
+                                        ? $disk->temporaryUrl($state, now()->addMinutes(10))
+                                        : $disk->url($state);
+
+                                    return new HtmlString(
+                                        '<img src="'.$url.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
+                                    );
+                                }
+
+                                // ✅ Si por alguna razón vino URL absoluta
+                                if (is_string($state) && str_starts_with($state, 'http')) {
+                                    return new HtmlString(
+                                        '<img src="'.$state.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
+                                    );
+                                }
+
+                                return '-';
                             }),
 
                             Forms\Components\FileUpload::make('url')
