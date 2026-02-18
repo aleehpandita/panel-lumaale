@@ -388,7 +388,7 @@ class TourResource extends Resource
                                 ->preserveFilenames(false)
                                 ->dehydrated(true)
                                 ->maxSize(4096)
-                                ->required(),
+                                ->required(fn (Get $get) => blank($get('url'))),
                                 
 
                             Forms\Components\TextInput::make('sort_order')
