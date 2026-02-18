@@ -19,7 +19,6 @@ use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
-
 class TourResource extends Resource
 {
     protected static ?string $model = Tour::class;
@@ -350,37 +349,71 @@ class TourResource extends Resource
                     Repeater::make('images')
                         ->relationship()
                         ->schema([
-                          Placeholder::make('current_gallery_image')
+                         Placeholder::make('current_gallery_image')
                             ->label('Imagen actual')
+                            ->reactive()
                             ->content(function (Get $get) {
                                 $state = $get('url');
 
-                                // ✅ Filament a veces lo hidrata como array aunque sea single-file
+                                // 1) Si viene como array (a veces aunque sea single)
                                 if (is_array($state)) {
                                     $state = $state[0] ?? null;
                                 }
 
-                                if (blank($state)) {
+                                // 2) Si viene como TemporaryUploadedFile (cuando aún no se guarda “final”)
+                                if ($state instanceof TemporaryUploadedFile) {
+                                    try {
+                                        $tmpUrl = $state->temporaryUrl();
+                                        return new HtmlString(
+                                            '<img src="'.$tmpUrl.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
+                                        );
+                                    } catch (\Throwable $e) {
+                                        return '-';
+                                    }
+                                }
+
+                                if (blank($state) || ! is_string($state)) {
                                     return '-';
                                 }
 
-                                // ✅ Si ya está guardado como key en S3 (tours/...)
-                                if (is_string($state) && str_starts_with($state, 'tours/')) {
+                                // 3) Si viene URL absoluta
+                                if (str_starts_with($state, 'http')) {
+                                    return new HtmlString(
+                                        '<img src="'.$state.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
+                                    );
+                                }
+
+                                // 4) Normalizar key hacia S3
+                                $key = $state;
+
+                                // si te guardaron "gallery/xxx.webp" o "main/xxx.webp"
+                                if (str_starts_with($key, 'gallery/')) $key = 'tours/' . $key;
+                                if (str_starts_with($key, 'main/'))    $key = 'tours/' . $key;
+
+                                // si viene solo filename "xxx.webp"
+                                if (! str_contains($key, '/') && preg_match('/\.(jpe?g|png|webp)$/i', $key)) {
+                                    $key = 'tours/gallery/' . $key;
+                                }
+
+                                // 5) Si ya es S3 key
+                                if (str_starts_with($key, 'tours/')) {
                                     $disk = Storage::disk('s3');
 
+                                    // en Laravel normalmente existe url() (y temporaryUrl si el driver lo soporta)
                                     $url = method_exists($disk, 'temporaryUrl')
-                                        ? $disk->temporaryUrl($state, now()->addMinutes(10))
-                                        : $disk->url($state);
+                                        ? $disk->temporaryUrl($key, now()->addMinutes(10))
+                                        : $disk->url($key);
 
                                     return new HtmlString(
                                         '<img src="'.$url.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
                                     );
                                 }
 
-                                // ✅ Si por alguna razón vino URL absoluta
-                                if (is_string($state) && str_starts_with($state, 'http')) {
+                                // 6) Si quedó local "uploads/..." (solo si existe storage:link)
+                                if (str_starts_with($key, 'uploads/')) {
+                                    $url = asset('storage/' . $key);
                                     return new HtmlString(
-                                        '<img src="'.$state.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
+                                        '<img src="'.$url.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
                                     );
                                 }
 
