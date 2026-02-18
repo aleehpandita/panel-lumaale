@@ -24,7 +24,73 @@ class TourResource extends Resource
 {
     protected static ?string $model = Tour::class;
     protected static ?string $navigationIcon = 'heroicon-o-map';
+    protected static function s3PreviewUrl(string $key): ?string
+    {
+        try {
+            $disk = Storage::disk('s3');
 
+            // Si el adapter soporta URLs temporales (S3 privado), úsalo
+            if (method_exists($disk, 'temporaryUrl')) {
+                return $disk->temporaryUrl($key, now()->addMinutes(10));
+            }
+
+            // Si no, intenta URL normal
+            if (method_exists($disk, 'url')) {
+                return $disk->url($key);
+            }
+
+            // Último fallback: usar el "url" configurado del disk s3 (si existe)
+            $base = config('filesystems.disks.s3.url');
+            return $base ? rtrim($base, '/') . '/' . ltrim($key, '/') : null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Normaliza lo que viene del estado (puede ser null, array, filename suelto, etc)
+     * y regresa una URL lista para <img src="..."> o null.
+     */
+    protected static function previewUrlFromState($state, string $defaultPrefix = 'tours/gallery/'): ?string
+    {
+        if (blank($state)) return null;
+
+        // A veces llega como array
+        if (is_array($state)) {
+            $state = $state[0] ?? null;
+            if (blank($state)) return null;
+        }
+
+        // URL absoluta
+        if (is_string($state) && str_starts_with($state, 'http')) {
+            return $state;
+        }
+
+        if (! is_string($state)) return null;
+
+        $key = $state;
+
+        // Si guardaste algo tipo "gallery/xxx.webp" o "main/xxx.webp"
+        if (str_starts_with($key, 'gallery/')) $key = 'tours/' . $key;
+        if (str_starts_with($key, 'main/'))    $key = 'tours/' . $key;
+
+        // Si viene solo el filename "xxx.webp", asumimos que es galería
+        if (! str_contains($key, '/') && preg_match('/\.(jpe?g|png|webp)$/i', $key)) {
+            $key = rtrim($defaultPrefix, '/') . '/' . $key;
+        }
+
+        // Si ya es key completo tipo "tours/..."
+        if (str_starts_with($key, 'tours/')) {
+            return self::s3PreviewUrl($key);
+        }
+
+        // Si por alguna razón quedó local "uploads/..." y tienes storage:link
+        if (str_starts_with($key, 'uploads/')) {
+            return asset('storage/' . $key); // si no hay symlink, esto dará 404 pero no revienta
+        }
+
+        return null;
+    }
         protected static function s3Url(string $path): string
     {
         $disk = Storage::disk('s3');
@@ -284,37 +350,18 @@ class TourResource extends Resource
                     Repeater::make('images')
                         ->relationship()
                         ->schema([
-                            Placeholder::make('current_gallery_image')
-                                ->label('Imagen actual')
-                                ->content(function (Get $get) {
-                                    $path = $get('url');
+                           Placeholder::make('current_gallery_image')
+                            ->label('Imagen actual')
+                            ->content(function (Get $get) {
+                                $state = $get('url');
 
-                                    if (blank($path)) {
-                                        return '-';
-                                    }
+                                $url = self::previewUrlFromState($state, 'tours/gallery/');
+                                if (! $url) return '-';
 
-                                    // Si ya está en S3 como key (ej: tours/gallery/xxxx.webp)
-                                    if (is_string($path) && str_starts_with($path, 'tours/')) {
-                                        $disk = Storage::disk('s3');
-
-                                        $url = method_exists($disk, 'temporaryUrl')
-                                            ? $disk->temporaryUrl($path, now()->addMinutes(10))
-                                            : $disk->url($path);
-
-                                        return new HtmlString(
-                                            '<img src="'.$url.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
-                                        );
-                                    }
-
-                                    // Si por alguna razón quedó una URL absoluta
-                                    if (is_string($path) && str_starts_with($path, 'http')) {
-                                        return new HtmlString(
-                                            '<img src="'.$path.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
-                                        );
-                                    }
-
-                                    return '-';
-                                }),
+                                return new HtmlString(
+                                    '<img src="'.$url.'" style="max-width:160px;height:auto;border-radius:8px;border:1px solid #e5e7eb;" />'
+                                );
+                            }),
 
                             Forms\Components\FileUpload::make('url')
                                 ->label('Imagen')
