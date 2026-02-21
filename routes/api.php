@@ -1,6 +1,8 @@
 <?php
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\TourController;
+use App\Http\Controllers\Api\DestinationController;
+
 
 
 Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
@@ -8,6 +10,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/tours/{slug}', [\App\Http\Controllers\Api\TourController::class, 'show']);
     Route::get('/tours/{slug}/availability', [\App\Http\Controllers\Api\TourController::class, 'availability']);
     Route::get('/v1/me', fn (\Illuminate\Http\Request $r) => $r->user());
+     Route::get('/destinations', [DestinationController::class, 'index']);
+    Route::get('/destinations/{slug}', [DestinationController::class, 'show']);
 });
 
 
