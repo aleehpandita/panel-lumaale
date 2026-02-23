@@ -2,14 +2,15 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
-use App\Http\Controllers\Api\TourController;
-use App\Http\Controllers\Api\BookingController;
+use App\Http\Controllers\HomeController;
+use App\Http\Controllers\PageController;
+use App\Http\Controllers\TourController as WebTourController;
 
 /*
 |--------------------------------------------------------------------------
 | Web Routes
 |--------------------------------------------------------------------------
-| Aquí SÍ hay sesión, cookies y auth()->check()
+| Aquí SÍ hay sesión, cookies, auth, etc.
 */
 
 // 👉 Redirección raíz del panel
@@ -19,20 +20,29 @@ Route::get('/', function () {
         : redirect('/admin/login');
 });
 
+// 👉 (Opcional) Redirección amigable del sitio público sin afectar el panel
+// Si tú NO usas "/" para público, NO la necesitas.
+// Si algún día quieres que "/" sea el sitio público, esto cambiaría.
+Route::get('/tours', function () {
+    return redirect('/es/tours');
+});
+
 /*
 |--------------------------------------------------------------------------
-| API Routes (públicas, sin sesión)
+| Public Frontend (Trevlo) con idioma en URL
 |--------------------------------------------------------------------------
-| Si quieres, luego puedes moverlas a api.php
 */
+Route::group([
+    'prefix' => '{locale}',
+    'where' => ['locale' => 'es|en'],
+    'middleware' => ['locale.route'],
+], function () {
 
-Route::prefix('api')->group(function () {
+    Route::get('/', [HomeController::class, 'index'])->name('home');
 
-    Route::prefix('tours')->group(function () {
-        Route::get('/', [TourController::class, 'index']);
-        Route::get('{slug}', [TourController::class, 'show']);
-        Route::get('{slug}/availability', [TourController::class, 'availability']);
-    });
+    Route::get('/about', [PageController::class, 'about'])->name('about');
 
-    Route::post('bookings', [BookingController::class, 'store']);
+    Route::get('/tours', [WebTourController::class, 'index'])->name('tours.index');
+
+    Route::get('/tours/{slug}', [WebTourController::class, 'show'])->name('tours.show');
 });

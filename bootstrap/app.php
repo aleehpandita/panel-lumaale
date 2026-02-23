@@ -13,6 +13,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         //
+         $middleware->alias([
+            'locale.route' => \App\Http\Middleware\SetLocaleFromRoute::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
