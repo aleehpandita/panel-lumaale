@@ -10,6 +10,9 @@ class TourCategory extends Model
         'name',
         'slug',
     ];
+    protected $casts = [
+        'name' => 'array',
+    ];
 
     public function tours()
     {

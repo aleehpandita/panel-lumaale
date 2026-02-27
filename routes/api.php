@@ -5,6 +5,7 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Api\TourController;
 use App\Http\Controllers\Api\DestinationController;
 use App\Http\Controllers\Api\BookingController;
+use App\Http\Controllers\Api\CategoryController;
 
 /*
 |--------------------------------------------------------------------------
@@ -19,6 +20,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
     Route::get('/destinations', [DestinationController::class, 'index']);
     Route::get('/destinations/{slug}', [DestinationController::class, 'show']);
+
+    Route::get('/categories', [CategoryController::class, 'index']);
 
     Route::get('/me', fn (Request $r) => $r->user());
 });

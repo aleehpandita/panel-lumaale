@@ -21,20 +21,22 @@ class TourCategoryResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
-    public static function form(Form $form): Form
+  public static function form(Form $form): Form
     {
-        return $form->schema([
-            Forms\Components\TextInput::make('name')
-                ->required()
-                ->live(onBlur: true)
-                ->afterStateUpdated(function ($state, Forms\Set $set) {
-                    $set('slug', Str::slug($state));
-                }),
+        return $form
+            ->schema([
 
-            Forms\Components\TextInput::make('slug')
-                ->required()
-                ->unique(ignoreRecord: true),
-        ]);
+                Forms\Components\TextInput::make('name.es')
+                    ->label('Nombre (ES)')
+                    ->required(),
+
+                Forms\Components\TextInput::make('name.en')
+                    ->label('Name (EN)')
+                    ->required(),
+
+                Forms\Components\TextInput::make('slug')
+                    ->required(),
+            ]);
     }
 
 
@@ -42,9 +44,11 @@ class TourCategoryResource extends Resource
     {
         return $table
             ->columns([
-                \Filament\Tables\Columns\TextColumn::make('name')
-                    ->searchable()
-                    ->sortable(),
+               Tables\Columns\TextColumn::make('name')
+                ->label('Nombre')
+                ->formatStateUsing(fn ($state) =>
+                    is_array($state) ? ($state['es'] ?? '') : (string) $state
+                ),
 
                 \Filament\Tables\Columns\TextColumn::make('slug')
                     ->searchable()
