@@ -91,12 +91,7 @@ class TourResource extends JsonResource
                     : null,
                 'sort_order' => $img->sort_order,
             ]),
-
-            'departures' => $this->departures->where('is_active', true)->values()->map(fn($d) => [
-                'id' => $d->id,
-                'departure_time' => $d->departure_time,
-            ]),
-
+            
             'prices' => $this->prices->map(fn($p) => [
                 'id' => $p->id,
                 'name' => $p->name,
@@ -106,6 +101,11 @@ class TourResource extends JsonResource
                 'price_child' => $p->price_child,
                 'price_infant' => $p->price_infant,
                 'currency' => $p->currency,
+            ]),
+            'operating_days' => $this->operating_days ?? [],
+            'departures' => $this->departures->where('is_active', true)->values()->map(fn($d) => [
+                'id' => $d->id,
+                'departure_time' => $d->departure_time,
             ]),
         ];
     }

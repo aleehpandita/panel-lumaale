@@ -29,6 +29,7 @@ class Tour extends Model
         'meeting_point' => 'array',
         'included' => 'array',
         'not_included' => 'array',
+        'operating_days' => 'array',
     ];
     public function i18n(string $field, string $lang = 'es', $fallback = 'es')
     {

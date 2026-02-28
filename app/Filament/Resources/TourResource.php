@@ -19,6 +19,7 @@ use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use App\Models\TourCategory;
+use Filament\Forms\Components\CheckboxList;
 
 
 class TourResource extends Resource
@@ -407,18 +408,7 @@ class TourResource extends Resource
                         ->defaultItems(0),
                 ]),
 
-            Forms\Components\Section::make('Horarios (si aplica)')
-                ->schema([
-                    Repeater::make('departures')
-                        ->relationship()
-                        ->schema([
-                            Forms\Components\TimePicker::make('departure_time')->required(),
-                            Forms\Components\Toggle::make('is_active')->default(true),
-                        ])
-                        ->columns(2)
-                        ->defaultItems(0),
-                ]),
-
+           
             Forms\Components\Section::make('Precios (flexible)')
                 ->schema([
                     Repeater::make('prices')
@@ -441,6 +431,32 @@ class TourResource extends Resource
                         ->columns(3)
                         ->defaultItems(1),
                 ]),
+                CheckboxList::make('operating_days')
+                    ->label('Días de operación')
+                    ->options([
+                        'mon' => 'Lunes',
+                        'tue' => 'Martes',
+                        'wed' => 'Miércoles',
+                        'thu' => 'Jueves',
+                        'fri' => 'Viernes',
+                        'sat' => 'Sábado',
+                        'sun' => 'Domingo',
+                    ])
+                    ->columns(4)
+                    ->helperText('Si no seleccionas ninguno, se asumirá que opera todos los días.'),
+                Forms\Components\Section::make('Horarios (si aplica)')
+                        ->schema([
+                            Repeater::make('departures')
+                                ->relationship()
+                                ->schema([
+                                    Forms\Components\TimePicker::make('departure_time')->required(),
+                                    Forms\Components\Toggle::make('is_active')->default(true),
+                                ])
+                                ->columns(2)
+                                ->defaultItems(0),
+                        ]),
+
+        
         ]);
     }
 
