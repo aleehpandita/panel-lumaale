@@ -431,19 +431,25 @@ class TourResource extends Resource
                         ->columns(3)
                         ->defaultItems(1),
                 ]),
-                CheckboxList::make('operating_days')
-                    ->label('Días de operación')
-                    ->options([
-                        'mon' => 'Lunes',
-                        'tue' => 'Martes',
-                        'wed' => 'Miércoles',
-                        'thu' => 'Jueves',
-                        'fri' => 'Viernes',
-                        'sat' => 'Sábado',
-                        'sun' => 'Domingo',
-                    ])
-                    ->columns(4)
-                    ->helperText('Si no seleccionas ninguno, se asumirá que opera todos los días.'),
+               Forms\Components\Section::make('Disponibilidad')
+                ->description('Define los días en que opera este tour.')
+                ->schema([
+                    CheckboxList::make('operating_days')
+                        ->label('Días de operación')
+                        ->options([
+                            'mon' => 'Lunes',
+                            'tue' => 'Martes',
+                            'wed' => 'Miércoles',
+                            'thu' => 'Jueves',
+                            'fri' => 'Viernes',
+                            'sat' => 'Sábado',
+                            'sun' => 'Domingo',
+                        ])
+                        ->columns(4)
+                        ->helperText('Si no seleccionas ninguno, se asumirá que opera todos los días.'),
+                ])
+                ->columns(1)
+                ->collapsed(false),
                 Forms\Components\Section::make('Horarios (si aplica)')
                         ->schema([
                             Repeater::make('departures')
