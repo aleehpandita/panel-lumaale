@@ -18,6 +18,8 @@ use Filament\Forms\Get;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use App\Models\TourCategory;
+
 
 class TourResource extends Resource
 {
@@ -305,11 +307,13 @@ class TourResource extends Resource
                     TextInput::make('min_people')->numeric()->default(1),
                     TextInput::make('max_people')->numeric(),
 
-                    Select::make('categories')
-                        ->relationship('categories', 'name')
-                        ->multiple()
-                        ->preload()
-                        ->searchable(),
+                Select::make('categories')
+                    ->label('Categorías')
+                    ->multiple()
+                    ->preload()
+                    ->searchable()
+                    ->relationship('categories', 'slug') // titleAttribute 'slug' (string) solo para que Filament tenga algo estable
+                    ->getOptionLabelFromRecordUsing(fn (TourCategory $record) => $record->nameFor('es'))
                 ])
                 ->columns(2),
 

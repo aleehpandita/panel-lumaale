@@ -16,6 +16,15 @@ class TourCategory extends Model
 
     public function tours()
     {
-        return $this->belongsToMany(Tour::class, 'tour_tour_category');
+        //return $this->belongsToMany(Tour::class, 'tour_tour_category');
+        return $this->belongsToMany(Tour::class, 'tour_tour_category', 'tour_category_id', 'tour_id');
+    }
+     public function nameFor(string $locale = 'es'): string
+    {
+        $name = $this->name ?? [];
+        if (is_array($name)) {
+            return $name[$locale] ?? $name['es'] ?? $this->slug ?? '';
+        }
+        return (string) $name;
     }
 }

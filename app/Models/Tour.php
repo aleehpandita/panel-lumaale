@@ -40,10 +40,14 @@ class Tour extends Model
             ?? $value[$fallback]
             ?? null;
     }
-    public function categories()
+   public function categories()
     {
-        // Pivot: tour_tour_category (tour_id, tour_category_id)
-        return $this->belongsToMany(TourCategory::class, 'tour_tour_category');
+        return $this->belongsToMany(
+            TourCategory::class,
+            'tour_tour_category',
+            'tour_id',
+            'tour_category_id'
+        );
     }
 
     public function images()
