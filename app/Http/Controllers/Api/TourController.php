@@ -41,11 +41,17 @@ class TourController extends Controller
     }
 
     // GET /api/tours/{slug}
-    public function show(string $slug)
+ public function show(string $slug)
     {
+        app()->setLocale(request('locale', app()->getLocale()));
+        $locale = request('locale') ?: request()->header('Accept-Language');
+        if ($locale) {
+            app()->setLocale(substr($locale, 0, 2));
+        }
+
         $tour = Tour::where('slug', $slug)
             ->where('status', 'published')
-            ->with(['destination','categories', 'images', 'departures', 'prices'])
+            ->with(['destination', 'categories', 'images', 'departures', 'prices'])
             ->firstOrFail();
 
         return new TourResource($tour);

@@ -11,8 +11,13 @@ class TourResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $lang = (string) $request->query('lang', 'es');
-        $fallback = 'es';
+        $lang = request('locale')
+            ?: substr((string) request()->header('Accept-Language'), 0, 2)
+            ?: app()->getLocale()
+            ?: 'es';
+
+        $lang = in_array($lang, ['es', 'en'], true) ? $lang : 'es';
+        $fallback = $lang === 'en' ? 'es' : 'en';
 
         $main = $this->main_image_url;
 
