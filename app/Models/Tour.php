@@ -20,6 +20,7 @@ class Tour extends Model
         'main_image_url',
         'included',
         'not_included',
+        'operating_days',
     ];
 
     protected $casts = [
