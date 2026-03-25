@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Post;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class PostController extends Controller
 {
@@ -14,7 +15,7 @@ class PostController extends Controller
         $perPage = (int) $request->get('per_page', 10);
 
         $posts = Post::query()
-            ->where('is_published', true)
+            ->where('status', 'published')
             ->orderByDesc('published_at')
             ->paginate($perPage);
 
@@ -31,7 +32,7 @@ class PostController extends Controller
 
         $post = Post::query()
             ->where('slug', $slug)
-            ->where('is_published', true)
+            ->where('status', 'published')
             ->firstOrFail();
 
         return response()->json([
@@ -41,19 +42,18 @@ class PostController extends Controller
 
     private function transformPost(Post $post, string $lang, bool $withContent = false): array
     {
-        $title = $this->translateField($post->title, $lang);
-        $excerpt = $this->translateField($post->excerpt ?? null, $lang);
-        $content = $this->translateField($post->content ?? null, $lang);
-
         return [
             'id' => $post->id,
             'slug' => $post->slug,
-            'title' => $title,
-            'excerpt' => $excerpt,
-            'content' => $withContent ? $content : null,
-            'featured_image_url' => $post->featured_image_url ?? $post->image_url ?? null,
+            'locale' => $post->locale,
+            'title' => $this->translateField($post->title, $lang),
+            'excerpt' => $this->translateField($post->excerpt, $lang),
+            'content' => $withContent ? $this->translateField($post->content, $lang) : null,
+            'featured_image_url' => $this->imageUrl($post->featured_image),
             'published_at' => optional($post->published_at)?->toISOString(),
-            'author_name' => $post->author_name ?? 'Admin',
+            'status' => $post->status,
+            'seo_title' => $post->seo_title,
+            'seo_description' => $post->seo_description,
         ];
     }
 
@@ -64,14 +64,26 @@ class PostController extends Controller
         }
 
         if (is_array($value)) {
-            return $value[$lang] ?? $value['en'] ?? reset($value) ?: null;
-        }
-
-        $decoded = json_decode($value, true);
-        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-            return $decoded[$lang] ?? $decoded['en'] ?? reset($decoded) ?: null;
+            return $value[$lang] ?? $value['en'] ?? $value['es'] ?? reset($value) ?: null;
         }
 
         return (string) $value;
+    }
+
+    private function imageUrl(?string $path): ?string
+    {
+        if (!$path) {
+            return null;
+        }
+
+        if (filter_var($path, FILTER_VALIDATE_URL)) {
+            return $path;
+        }
+
+        try {
+            return Storage::disk('public')->url($path);
+        } catch (\Throwable $e) {
+            return $path;
+        }
     }
 }

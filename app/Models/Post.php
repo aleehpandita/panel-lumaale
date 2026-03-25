@@ -32,7 +32,11 @@ class Post extends Model
     {
         static::saving(function (Post $post) {
             if (blank($post->slug) && filled($post->title)) {
-                $post->slug = Str::slug($post->title);
+                $title = is_array($post->title)
+                    ? ($post->title['en'] ?? $post->title['es'] ?? reset($post->title))
+                    : $post->title;
+
+                $post->slug = Str::slug($title);
             }
 
             if ($post->status === 'published' && blank($post->published_at)) {
