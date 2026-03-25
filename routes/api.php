@@ -2,11 +2,11 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
-use App\Http\Controllers\Api\TourController;
-use App\Http\Controllers\Api\DestinationController;
-use App\Http\Controllers\Api\BookingController;
-use App\Http\Controllers\Api\CategoryController;
-
+use App\Http\Controllers\Api\V1\TourController;
+use App\Http\Controllers\Api\V1\DestinationController;
+use App\Http\Controllers\Api\V1\BookingController;
+use App\Http\Controllers\Api\V1\CategoryController;
+use App\Http\Controllers\Api\V1\PostController;
 /*
 |--------------------------------------------------------------------------
 | API PRIVADA (token) - para admin/integraciones
@@ -22,6 +22,9 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::get('/destinations/{slug}', [DestinationController::class, 'show']);
 
     Route::get('/categories', [CategoryController::class, 'index']);
+
+    Route::get('/posts', [PostController::class, 'index']);
+    Route::get('/posts/{slug}', [PostController::class, 'show']);
 
     Route::get('/me', fn (Request $r) => $r->user());
 });

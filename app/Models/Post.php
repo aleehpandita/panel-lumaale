@@ -20,7 +20,11 @@ class Post extends Model
         'seo_description',
     ];
 
-    protected $casts = [
+   protected $casts = [
+        'title' => 'array',
+        'excerpt' => 'array',
+        'content' => 'array',
+        'is_published' => 'boolean',
         'published_at' => 'datetime',
     ];
 
