@@ -16,11 +16,12 @@ class PostController extends Controller
 
         $posts = Post::query()
             ->where('status', 'published')
+            ->where('locale', $lang)
             ->orderByDesc('published_at')
             ->paginate($perPage);
 
-        $posts->getCollection()->transform(function ($post) use ($lang) {
-            return $this->transformPost($post, $lang, false);
+        $posts->getCollection()->transform(function ($post) {
+            return $this->transformPost($post, false);
         });
 
         return response()->json($posts);
@@ -32,42 +33,30 @@ class PostController extends Controller
 
         $post = Post::query()
             ->where('slug', $slug)
+            ->where('locale', $lang)
             ->where('status', 'published')
             ->firstOrFail();
 
         return response()->json([
-            'data' => $this->transformPost($post, $lang, true),
+            'data' => $this->transformPost($post, true),
         ]);
     }
 
-    private function transformPost(Post $post, string $lang, bool $withContent = false): array
+    private function transformPost(Post $post, bool $withContent = false): array
     {
         return [
             'id' => $post->id,
             'slug' => $post->slug,
             'locale' => $post->locale,
-            'title' => $this->translateField($post->title, $lang),
-            'excerpt' => $this->translateField($post->excerpt, $lang),
-            'content' => $withContent ? $this->translateField($post->content, $lang) : null,
+            'title' => $post->title,
+            'excerpt' => $post->excerpt,
+            'content' => $withContent ? $post->content : null,
             'featured_image_url' => $this->imageUrl($post->featured_image),
             'published_at' => optional($post->published_at)?->toISOString(),
             'status' => $post->status,
             'seo_title' => $post->seo_title,
             'seo_description' => $post->seo_description,
         ];
-    }
-
-    private function translateField($value, string $lang): ?string
-    {
-        if (is_null($value)) {
-            return null;
-        }
-
-        if (is_array($value)) {
-            return $value[$lang] ?? $value['en'] ?? $value['es'] ?? reset($value) ?: null;
-        }
-
-        return (string) $value;
     }
 
     private function imageUrl(?string $path): ?string

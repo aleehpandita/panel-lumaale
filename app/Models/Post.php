@@ -20,11 +20,7 @@ class Post extends Model
         'seo_description',
     ];
 
-   protected $casts = [
-        'title' => 'array',
-        'excerpt' => 'array',
-        'content' => 'array',
-        'is_published' => 'boolean',
+    protected $casts = [
         'published_at' => 'datetime',
     ];
 
@@ -32,11 +28,7 @@ class Post extends Model
     {
         static::saving(function (Post $post) {
             if (blank($post->slug) && filled($post->title)) {
-                $title = is_array($post->title)
-                    ? ($post->title['en'] ?? $post->title['es'] ?? reset($post->title))
-                    : $post->title;
-
-                $post->slug = Str::slug($title);
+                $post->slug = Str::slug($post->title);
             }
 
             if ($post->status === 'published' && blank($post->published_at)) {
