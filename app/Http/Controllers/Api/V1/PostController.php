@@ -11,7 +11,7 @@ class PostController extends Controller
 {
     public function index(Request $request)
     {
-        $lang = $request->get('lang', 'en');
+        $lang = $request->get('locale') ?? $request->get('lang', 'en');
         $perPage = (int) $request->get('per_page', 10);
 
         $posts = Post::query()
@@ -29,7 +29,7 @@ class PostController extends Controller
 
     public function show(Request $request, string $slug)
     {
-        $lang = $request->get('lang', 'en');
+        $lang = $request->get('locale') ?? $request->get('lang', 'en');
 
         $post = Post::query()
             ->where('slug', $slug)
