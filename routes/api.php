@@ -46,4 +46,7 @@ Route::prefix('public/v1')->group(function () {
     Route::get('/destinations/{slug}', [DestinationController::class, 'show']);
 
     Route::post('/bookings', [BookingController::class, 'store']);
+    Route::get('/categories', [CategoryController::class, 'index']);
+    Route::get('/posts', [PostController::class, 'index']);
+    Route::get('/posts/{slug}', [PostController::class, 'show']);
 });
